@@ -1,0 +1,1224 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# 1. Make MA and correlation plot
+
+```{r}
+save_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/Zonation_library/BAD_library/analysis/V7/'
+```
+
+```{r}
+raw_counts <- readRDS(paste0(save_path, 'raw_counts.RDS'))
+raw_counts <- raw_counts[,c(grep('Ecad', colnames(raw_counts)), grep('CD73', colnames(raw_counts)), grep('lasmid', colnames(raw_counts)), grep('Nanopore', colnames(raw_counts)))]
+raw_counts <- raw_counts[,-grep('5prime', colnames(raw_counts))]
+raw_counts <- raw_counts[,-grep('HepG2', colnames(raw_counts))]
+colnames(raw_counts) <- gsub('M12S1', 'S3', colnames(raw_counts))
+colnames(raw_counts) <- gsub('M3S1', 'S4', colnames(raw_counts))
+colnames(raw_counts) <- gsub('3prime_', '', colnames(raw_counts))
+colnames(raw_counts) <- gsub('plasmid', 'Plasmid', colnames(raw_counts))
+raw_counts$Ecad_S1_cDNA <- rowSums(raw_counts[,c('EcadHigh_S1_cDNA', 'EcadLow_S1_cDNA')])
+raw_counts$Ecad_S2_cDNA <- rowSums(raw_counts[,c('EcadHigh_S2_cDNA', 'EcadLow_S2_cDNA')])
+raw_counts$Ecad_S3_cDNA <- raw_counts[,c('EcadLow_S3_cDNA')]
+raw_counts$Ecad_S4_cDNA <- rowSums(raw_counts[,c('EcadHigh_S4_cDNA', 'EcadLow_S4_cDNA')])
+raw_counts$CD73_S2_cDNA <- rowSums(raw_counts[,c("CD73High_S2_cDNA", "CD73Low_S2_cDNA")])
+raw_counts$CD73_S3_cDNA <- rowSums(raw_counts[,c("CD73High_S3_cDNA", "CD73Low_S3_cDNA")])
+raw_counts$CD73_S4_cDNA <- rowSums(raw_counts[,c("CD73High_S4_cDNA", "CD73Low_S4_cDNA")])
+colnames(raw_counts)
+#out <- c('3prime_HepG2_S4_cDNA', '3prime_Mouse48hr_M1S1_cDNA', '3prime_Mouse48hr_M2S1_cDNA', '3prime_Mouse48hr_M3S1_cDNA')
+#raw_counts <- raw_counts[,-which(colnames(raw_counts) %in% out)]
+```
+```{r}
+write.table(raw_counts, file='/staging/leuven/stg_00002/lcb/cbravo/GEO_Bravo_etal_2022/geo_submission/FACS-MPRA/processed/FACS_455_MPRA_counts.tsv', quote=FALSE, sep='\t', row.names = TRUE, col.names = TRUE)
+```
+
+MA plots 
+
+```{r}
+enhancer_of_origin <- sapply(strsplit(rownames(raw_counts), split = "_"), "[", 1)
+region_type <- rep('Mutation', length(enhancer_of_origin))
+region_type[grep('.*WT.*PP', rownames(raw_counts))] <- 'PP'
+region_type[grep('.*WT.*PC', rownames(raw_counts))] <- 'PC'
+region_type[grep('.*WT.*CTRL', rownames(raw_counts))] <- 'CTRL'
+region_type[grep('Shuffle', rownames(raw_counts))] <- 'Shuffle'
+enhancer_info <- as.data.frame(region_type)
+rownames(enhancer_info) <- rownames(raw_counts)
+```
+
+```{r}
+class_broad <- as.vector(unlist(enhancer_info$region_type))
+names(class_broad) <- rownames(enhancer_info)
+# Color legend
+library(scales)
+color_vector_broad <- rep(scales::alpha('lightgrey',0.5), length(rownames(enhancer_info)))
+names(color_vector_broad) <- names(class_broad)
+color_vector_broad[grep('PP',class_broad)] <- scales::alpha('blue')
+color_vector_broad[grep('PC',class_broad)] <- scales::alpha('forestgreen')
+color_vector_broad[grep('CTRL',class_broad)] <- scales::alpha('red')
+color_vector_broad[grep('Shuffle',class_broad)] <- scales::alpha('black')
+color_vector_broad <- color_vector_broad[rownames(raw_counts)]
+```
+
+```{r, fig.height = 8, fig.width = 8, fig.align = "center", message = FALSE, warnings = FALSE}
+cpm_counts <- sweep(raw_counts,2,colSums(raw_counts),`/`)*10^6
+par(mfrow=c(4,5))
+library(affy)
+library(preprocessCore)
+for (name in sort(colnames(cpm_counts)[grep('cDNA', colnames(cpm_counts))])){
+  x <- as.matrix(cpm_counts[, c(name, 'Nanopore_Assignments')])
+  
+  ma.plot(rowMeans(log2(x+1)), log2(x[,1]+1)-log2(x[,2]+1), cex=1, col=color_vector_broad[rownames(cpm_counts)], pch=16, type="p") 
+  title(paste(name))
+}
+plot(NULL ,xaxt='n',yaxt='n',bty='n',ylab='',xlab='', xlim=0:1, ylim=0:1)
+legend("center", legend =c('Mutation', 'PP', 'PC', 'CTRL', 'Shuffle'), pch=16, pt.cex=2, cex=1.5, bty='n',
+    col = c(scales::alpha('lightgrey', 0.2), 'blue', 'forestgreen','red', 'black'), title="Enhancer class")
+```
+
+
+Get correlation between samples and cluster.
+
+```{r, message = FALSE, warnings = FALSE}
+cormat <- round(cor(raw_counts),2)
+dist.mat <- dist(cormat)
+clust <- hclust(dist.mat)
+cormat <- cormat[clust$order,rev(clust$order)]
+colnames(cormat) <- gsub('_', ' ', colnames(cormat))
+rownames(cormat) <- gsub('_', ' ', rownames(cormat))
+```
+
+Make correlation heatmap.
+
+```{r, fig.height = 8, fig.width = 8, fig.align = "center", message = FALSE, warnings = FALSE}
+library(reshape2)
+library(ggplot2)
+# Format matrix
+melted_cormat <- melt(cormat)
+# Create heatmap
+ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "floralwhite", high = "red", 
+   midpoint = 0, limit = c(-0.05,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed()
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+# Add correlation values
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs_cheqseq_correlation_samples_all.pdf', width=8, height=8)
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+dev.off()
+```
+
+```{r, fig.height = 8, fig.width = 8, fig.align = "center", message = FALSE, warnings = FALSE}
+library(reshape2)
+library(ggplot2)
+cormat <- cormat[,-grep('Low', colnames(cormat))]
+cormat <- cormat[-grep('Low', rownames(cormat)),]
+cormat <- cormat[,-grep('High', colnames(cormat))]
+cormat <- cormat[-grep('High', rownames(cormat)),]
+# Format matrix
+melted_cormat <- melt(cormat)
+# Create heatmap
+ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "floralwhite", high = "red", 
+   midpoint = 0, limit = c(-0.05,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed()
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+# Add correlation values
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs_cheqseq_correlation_samples.pdf', width=8, height=8)
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+dev.off()
+```
+
+# 2. DESeq
+
+```{r}
+save_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/Zonation_library/BAD_library/analysis/V7/'
+raw_counts <- readRDS(paste0(save_path, 'raw_counts.RDS'))
+raw_counts <- raw_counts[,c(grep('Ecad', colnames(raw_counts)), grep('CD73', colnames(raw_counts)), grep('lasmid', colnames(raw_counts)), grep('Nanopore', colnames(raw_counts)))]
+raw_counts <- raw_counts[,-grep('5prime', colnames(raw_counts))]
+raw_counts <- raw_counts[,-grep('HepG2', colnames(raw_counts))]
+colnames(raw_counts) <- gsub('M12S1', 'S3', colnames(raw_counts))
+colnames(raw_counts) <- gsub('M3S1', 'S4', colnames(raw_counts))
+colnames(raw_counts) <- gsub('3prime_', '', colnames(raw_counts))
+colnames(raw_counts) <- gsub('plasmid', 'Plasmid', colnames(raw_counts))
+raw_counts$Ecad_S1_cDNA <- rowSums(raw_counts[,c('EcadHigh_S1_cDNA', 'EcadLow_S1_cDNA')])
+raw_counts$Ecad_S2_cDNA <- rowSums(raw_counts[,c('EcadHigh_S2_cDNA', 'EcadLow_S2_cDNA')])
+raw_counts$Ecad_S3_cDNA <- raw_counts[,c('EcadLow_S3_cDNA')]
+raw_counts$Ecad_S4_cDNA <- rowSums(raw_counts[,c('EcadHigh_S4_cDNA', 'EcadLow_S4_cDNA')])
+raw_counts$CD73_S2_cDNA <- rowSums(raw_counts[,c("CD73High_S2_cDNA", "CD73Low_S2_cDNA")])
+raw_counts$CD73_S3_cDNA <- rowSums(raw_counts[,c("CD73High_S3_cDNA", "CD73Low_S3_cDNA")])
+raw_counts$CD73_S4_cDNA <- rowSums(raw_counts[,c("CD73High_S4_cDNA", "CD73Low_S4_cDNA")])
+colnames(raw_counts)
+#out <- c('3prime_HepG2_S4_cDNA', '3prime_Mouse48hr_M1S1_cDNA', '3prime_Mouse48hr_M2S1_cDNA', '3prime_Mouse48hr_M3S1_cDNA')
+#raw_counts <- raw_counts[,-which(colnames(raw_counts) %in% out)]
+```
+
+```{r}
+library(DESeq2)
+raw_counts <- raw_counts[,-c(grep('S3', colnames(raw_counts)), grep('S4', colnames(raw_counts)))]
+timepoints <- c('Ecad', 'CD73', 'EcadHigh', 'EcadLow', 'CD73High', 'CD73Low')
+timepoints_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+plasmid_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+res_list <- list()
+res_list_filt <- list()
+for (time in timepoints){
+      print(time)
+      sub_raw_counts <- raw_counts[,which(timepoints_sample == time), drop=FALSE]
+      cdna <- sub_raw_counts[,grep('cDNA', colnames(sub_raw_counts)), drop=FALSE]
+      plas <- raw_counts[,grep('Plasmid', colnames(raw_counts))]
+      if (time == 'HepG2'){
+        plas <- plas[,grep('HepG2', colnames(plas))]
+      } else {
+        plas <- plas[,grep('Mouse', colnames(plas))]
+      }
+      #plas2 <- raw_counts[,grep('Nanopore', colnames(raw_counts)), drop=FALSE]
+      #colnames(plas2) <- "Nanopore_Assignments_Plasmid"
+      #sub_raw_counts <- cbind(cdna, plas, plas2)
+      sub_raw_counts <- cbind(cdna, plas)
+      samples <- sort(colnames(sub_raw_counts))
+      coldata <- sapply(strsplit(samples, split = "_"), "[", 3)
+      names(coldata) <- samples
+      coldata <- as.data.frame(coldata)
+      colnames(coldata) <- 'condition'
+      print(coldata)
+      if (length(samples) == 2){
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ 1)
+      } else{
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ condition)
+        dds$condition <- relevel(dds$condition, ref = "Plasmid")
+      }
+
+      dds <- DESeq(dds)
+      res <- results(dds)
+      cc_res <- res[complete.cases(res),]
+      res_list[[paste0(time)]] <- cc_res
+      print(dim(cc_res))
+      res_list_filt[[paste0(time)]] <- cc_res[which(cc_res$padj < 0.1),]
+      print(dim(cc_res[which(cc_res$padj < 0.1),]))
+}
+
+#saveRDS(res_list, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_results_no_prefilter_no_nanopore.Rds'))
+#saveRDS(res_list_filt, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_results_no_prefilter_01_no_nanopore.Rds'))
+```
+
+```{r}
+library(DESeq2)
+timepoints <- c('Ecad', 'CD73')
+raw_counts <- raw_counts[,-c(grep('CD73_', colnames(raw_counts)), grep('Ecad_', colnames(raw_counts)))]
+timepoints_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+plasmid_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+#res_list <- list()
+#res_list_filt <- list()
+for (time in timepoints){
+      print(time)
+      sub_raw_counts <- raw_counts[,grep(time, timepoints_sample), drop=FALSE]
+      cdna <- sub_raw_counts[,grep('cDNA', colnames(sub_raw_counts))]
+      plas <- raw_counts[,grep('Plasmid', colnames(raw_counts))]
+      if (time == 'HepG2'){
+        plas <- plas[,grep('HepG2', colnames(plas))]
+      } else {
+        plas <- plas[,grep('Mouse', colnames(plas))]
+      }
+      plas2 <- raw_counts[,grep('Nanopore', colnames(raw_counts)), drop=FALSE]
+      colnames(plas2) <- "Nanopore_Assignments_Plasmid"
+      sub_raw_counts <- cbind(cdna, plas)
+      samples <- sort(colnames(sub_raw_counts))
+      coldata <- sapply(strsplit(samples, split = "_"), "[", 3)
+      names(coldata) <- samples
+      coldata <- as.data.frame(coldata)
+      colnames(coldata) <- 'condition'
+      print(coldata)
+      if (length(samples) == 2){
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ 1)
+      } else{
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ condition)
+        dds$condition <- relevel(dds$condition, ref = "Plasmid")
+      }
+
+      dds <- DESeq(dds)
+      res <- results(dds)
+      cc_res <- res[complete.cases(res),]
+      res_list[[paste0(time, '_AR')]] <- cc_res
+      print(dim(cc_res))
+      res_list_filt[[paste0(time, '_AR')]] <- cc_res[which(cc_res$padj < 0.1),]
+      print(dim(cc_res[which(cc_res$padj < 0.1),]))
+}
+
+saveRDS(res_list, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_results_no_prefilter_no_nanopore.Rds'))
+saveRDS(res_list_filt, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_results_no_prefilter_01_no_nanopore.Rds'))
+```
+
+# 3. Create DF
+
+```{r}
+res_list <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_results_no_prefilter.Rds')
+#save_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/Zonation_library/BAD_library/analysis/V6/'
+#res_list <- readRDS(paste0(save_path, 'DESEQ_results_no_prefilter.Rds'))
+names(res_list) <- gsub('3prime_', '', names(res_list)) 
+# Take logFC
+logFC_list <- list()
+for (condition in names(res_list)){
+  subset <- as.data.frame(res_list[[condition]][,'log2FoldChange',drop=FALSE])
+  colnames(subset) <- condition
+  Q <- quantile(subset[,1], probs=c(0, 1), na.rm = FALSE)
+  iqr <- IQR(subset[,1])
+  up <-  Q[2]+1.5*iqr # Upper Range  
+  low<- Q[1]-1.5*iqr # Lower Range
+  subset <- subset[which(subset[,1] < up & subset[,1] > low),,drop=FALSE]
+  logFC_list[[condition]] <- subset
+}
+# Merge
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(logFC_list, function(x) { x$id <- rownames(x); x }))
+colnames(df) <- c("id", names(logFC_list))
+rownames(df) <- df[,1]
+df <- df[,-1]
+df_fc <- df
+colnames(df_fc) <- paste0('LogFC_', colnames(df_fc))
+
+# Take logFC
+logFC_list <- list()
+for (condition in names(res_list)){
+  subset <- as.data.frame(res_list[[condition]][,'padj',drop=FALSE])
+  colnames(subset) <- condition
+  Q <- quantile(subset[,1], probs=c(0, 1), na.rm = FALSE)
+  iqr <- IQR(subset[,1])
+  up <-  Q[2]+1.5*iqr # Upper Range  
+  low<- Q[1]-1.5*iqr # Lower Range
+  subset <- subset[which(subset[,1] < up & subset[,1] > low),,drop=FALSE]
+  logFC_list[[condition]] <- subset
+}
+# Merge
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(logFC_list, function(x) { x$id <- rownames(x); x }))
+colnames(df) <- c("id", names(logFC_list))
+rownames(df) <- df[,1]
+df <- df[,-1]
+colnames(df) <- paste0('pAdj_', colnames(df))
+df <- cbind(df, df_fc[rownames(df),])
+
+saveRDS(df, '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_logFC_padj_frame_old.RDS')
+```
+
+# 4. Binarize
+
+```{r}
+matrix_full <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/DESEQ_logFC_padj_frame_old.RDS')
+matrix_fc <- matrix_full[,grep('Log', colnames(matrix_full))]
+head(matrix_fc)
+matrix_padj <- matrix_full[,-grep('Log', colnames(matrix_full))]
+head(matrix_padj)
+```
+
+```{r}
+enhancer_info <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info.RDS')
+class_broad <- as.vector(unlist(enhancer_info$pattern))
+names(class_broad) <- enhancer_info[,1]
+```
+
+```{r}
+library(ggplot2)
+out <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs_thr_plots/'
+dir.create(out)
+enhancer_selection <- list()
+enhancer_list <-  list()
+enhancer_list_strict <- list()
+regions_passing_thresholds <- list()
+enhancer_list_medium <- list()
+
+for (name in colnames(matrix_fc)){
+  # Set sample data
+  print(paste0("Sample: ",name))
+  keep_1 <- rownames(matrix_fc)[!is.na(matrix_fc[,name])]
+  sample <- as.data.frame(cbind(matrix_fc[keep_1,name,drop=FALSE], class_broad[keep_1]))
+  print(paste0("Regions passing 1st DESEQ threshold: ",nrow(sample)))
+  keep_1 <- rownames(matrix_padj)[!is.na(matrix_padj[,gsub('LogFC', 'pAdj', name)])]
+  sample <- sample[which(rownames(sample) %in% keep_1),]
+  print(paste0("Regions passing 2nd DESEQ threshold: ",nrow(sample)))
+  colnames(sample) <- c('CPM.Input.BasalNorm', 'class_broad')
+  sample[,1] <- as.numeric(sample[,1])
+
+  ## Use median
+  location <- median(x = as.numeric(sample[grep('Shuffle', rownames(sample)), 'CPM.Input.BasalNorm']))
+  print(paste0("Median: ",location))
+  scale <- mad(x = as.numeric(sample[grep('Shuffle', rownames(sample)), 'CPM.Input.BasalNorm']))
+  # Check fit
+  p2 <- ggplot(data = sample, mapping = aes(x = CPM.Input.BasalNorm, fill = class_broad)) +
+          geom_density(size = 0, alpha = .5) +  
+          stat_function(fun = dnorm, args = list(mean = location, sd = scale)) + 
+          theme_classic() +
+          labs(title = name) + labs(x = "Log FC", y = "Density", fill='Enhancer class')
+  pdf(paste0(out, name, '_dist.pdf'))
+  print(p2)
+  dev.off()
+  print(p2)
+  # Determine p-values for all
+  sample$pvalue <- pnorm(q = sample$CPM.Input.BasalNorm, mean = location, sd = scale, lower.tail = F)
+  sample$padj <- p.adjust(p = sample$pvalue, method = "fdr")
+  p3 <- ggplot(data = sample, mapping = aes(x = padj < 0.1, fill = class_broad)) + 
+          geom_bar() +
+          theme_classic() +
+          labs(title = name) + labs(x = "Adjusted p-value < 0.1", y = "Number of regions", fill='Enhancer class') +
+  scale_x_discrete(labels=c("Not Active", "Active"))
+  pdf(paste0(out, name, '_barplot.pdf'))
+  print(p3)
+  dev.off()
+  print(p3)
+  p4 <- ggplot(sample, aes(x = padj, y = CPM.Input.BasalNorm, fill = class_broad)) +
+  geom_point(pch = 21, size = 3) +
+  geom_vline(xintercept = 0.05, linetype="dashed", color = "black", size = 0.5) +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        axis.text = element_text(color = "black", size = 7),
+        axis.title = element_text(size = 8),
+        legend.key = element_blank(),
+        legend.title = element_text(size = 7),
+        legend.text = element_text(size = 7),
+        legend.key.size = unit(0.8,"line")) + 
+  ggtitle(label = paste0(name)) 
+  print(p4)
+  # Get stats
+  print(paste('Sample:', name))
+  print("Proportions of active enhancers:")
+  print(nrow(sample[which(sample$padj < 0.1),])/sum(class_broad[keep_1] != "Shuffle")*100)
+  print(paste0("Percentage of active shuffled: ", nrow(sample[sample$padj < 0.1 & sample$class_broad == "Shuffle",])/sum(class_broad[keep_1] != "Shuffle")*100, "%"))
+  print(paste0("Number of active tiles: ",nrow(sample[sample$padj < 0.1,])))
+  print("")
+  # Save results
+  colnames(sample)[1] <- 'LogFC'
+  colnames(sample)[2] <- 'Region_type'
+  colnames(sample)[3] <- 'Enhancer_class'
+  enhancer_selection[[name]] <- sample
+  enhancer_list[[name]] <- rownames(sample[which(sample$padj < 0.1),])
+  enhancer_list_medium[[name]] <- rownames(sample[which(sample$padj < 0.05),])
+  enhancer_list_strict[[name]] <- rownames(sample[which(sample$padj < 0.01),])
+}
+```
+
+```{r}
+saveRDS(enhancer_selection, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/Gaussian_thr_on_DESEQ_values_strict_old.RDS')
+```
+
+```{r}
+# As data frame
+enhancer_list <- list()
+for (name in names(enhancer_selection)){
+  enhancer_list[[name]] <- rownames(enhancer_selection[[name]][which(enhancer_selection[[name]]$padj < 1),])
+  enhancer_selection[[name]] <- enhancer_selection[[name]][,c('LogFC', 'padj')]
+  colnames(enhancer_selection[[name]]) <- paste0(gsub('LogFC_', '',name), '_', colnames(enhancer_selection[[name]]))
+}
+
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(enhancer_selection, function(x) { x$id <- rownames(x); x }))
+rownames(df) <- df[,1]
+df <- df[,-1]
+saveRDS(df, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/Gaussian_thr_on_DESEQ_values_selected_strict_df_old.RDS')
+```
+
+# 5. Add to master frame
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+rownames(enhancers) <- enhancers[,1]
+enhancers
+```
+
+```{r}
+invivo_activity <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/Gaussian_thr_on_DESEQ_values_selected_strict_df_old.RDS')
+```
+
+```{r}
+enhancers <- merge(enhancers, invivo_activity, by=0, all=TRUE) 
+rownames(enhancers) <- enhancers[,1]
+enhancers <- enhancers[,-1]
+```
+
+```{r}
+saveRDS(enhancers, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_old.RDS')
+```
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_old.RDS')
+enhancers$mean_CD73 <- rowMeans(enhancers[,c("CD73Low_LogFC", "CD73High_LogFC",  "CD73_LogFC")], na.rm=T)
+enhancers$mean_Ecad <- rowMeans(enhancers[,c("EcadLow_LogFC", "EcadHigh_LogFC",  "Ecad_LogFC")], na.rm=T)
+```
+
+```{r}
+saveRDS(enhancers, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_old.RDS')
+```
+
+# 6. Plot correlations
+
+```{r}
+library(psych)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+df <- enhancers[,c("CD73Low_LogFC", "EcadLow_LogFC", "Mouse48hr_LogFC", "HepG2_LogFC", "DL_Active")]
+colnames(df) <- c('CD73', 'Ecad', 'Mouse', 'HepG2', 'DeepLiver')
+#df <- df[-which(df[,1] < -5),]
+df <- df[-which(df[,4] < -4),]
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/cheqseq_correlation_experiments_simple.pdf')
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+dev.off()
+```
+
+```{r}
+library(psych)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_no_nanopore.RDS')
+df <- enhancers[,c("CD73Low_LogFC", "CD73High_LogFC",  "CD73_LogFC", "EcadLow_LogFC", "EcadHigh_LogFC","Ecad_LogFC", "Mouse48hr_LogFC", "HepG2_LogFC", "DL_Active" )]
+#df <- df[-which(df[,1] < -5),]
+df <- df[-which(df[,8] < -4),]
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs/cheqseq_correlation_experiments_no_nanopore.pdf')
+library(psych)
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+dev.off()
+```
+
+# 7. Simplified violin plots per class per sample
+
+```{r}
+library(ggpubr)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+enhancers$pattern <- gsub('CTRL', 'Positive control', enhancers$pattern)
+enhancers$pattern <- gsub('PC', 'Pericentral', enhancers$pattern)
+enhancers$pattern <- gsub('PP', 'Periportal', enhancers$pattern)
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Pericentral'="#00C08E", 'Mutation'='orange')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+ggplot(enhancers, aes(x = reorder(pattern, -CD73_AR_LogFC, FUN = median, na.rm = TRUE), y = CD73_AR_LogFC, fill=reorder(pattern, -CD73_AR_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -CD73_LogFC, FUN = median, na.rm = TRUE), y = CD73_LogFC, fill=reorder(pattern, -CD73_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) 
+ggplot(enhancers, aes(x = reorder(pattern, -CD73Low_LogFC, FUN = median, na.rm = TRUE), y = CD73Low_LogFC, fill=reorder(pattern, -CD73Low_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -CD73High_LogFC, FUN = median, na.rm = TRUE), y = CD73High_LogFC, fill=reorder(pattern, -CD73High_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -mean_CD73, FUN = median, na.rm = TRUE), y = mean_CD73, fill=reorder(pattern, -mean_CD73, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+```
+```{r}
+ggplot(enhancers, aes(x = reorder(pattern, -Ecad_AR_LogFC, FUN = median, na.rm = TRUE), y = Ecad_AR_LogFC, fill=reorder(pattern, -Ecad_AR_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -Ecad_LogFC, FUN = median, na.rm = TRUE), y = Ecad_LogFC, fill=reorder(pattern, -Ecad_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -EcadLow_LogFC, FUN = median, na.rm = TRUE), y = EcadLow_LogFC, fill=reorder(pattern, -EcadLow_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -EcadHigh_LogFC, FUN = median, na.rm = TRUE), y = EcadHigh_LogFC, fill=reorder(pattern, -EcadHigh_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+ggplot(enhancers, aes(x = reorder(pattern, -mean_Ecad, FUN = median, na.rm = TRUE), y = mean_Ecad, fill=reorder(pattern, -mean_Ecad, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_Mouse48hr.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_HepG2.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_Mouse24hr.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse24hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse24hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+# 8. Violin plots per class per mutation per sample
+
+```{r}
+library(ggpubr)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("CTRL"= c[8], 'Shuffle'='red',  'PP' = "#9CA700", 'PC'="#00C08E", 'Hnf1a-GOF'='#fbb922', 'Hnf1a-LOF'='#fbb922', 'Tcf7l1/2-LOF'='#ec6730', 'Tcf7l1/2-GOF'='#ec6730', 'Tbx3-LOF'='#f7bfca', 'Tbx3-GOF'='#f7bfca', 'Cebpa-GOF'='#4783c4', 'Cebpa-LOF'='#4783c4', 'Foxa1-LOF'='#e94647', 'Foxa1-GOF'='#e94647', 'Hnf4a-GOF'='#278d37', 'Hnf4a-LOF'='#278d37', 'Onecut1-LOF'='#6d4796', 'Onecut1-GOF'='#6d4796')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+ml <- list()
+t <- table(as.vector(unlist(strsplit(df$mutation_edited, split = "_"))))
+t <- t[which(t > 5)]
+mut <- names(t)
+mut <- mut[-which(mut == 'Ets-LOF')]
+#mut <- names(table(as.vector(unlist(strsplit(df$mutation_edited, split = "_")))))
+for (m in mut){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  if(nrow(x) > 15){
+    ml[[m]] <- x
+  }
+}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_no_nanopore.RDS')
+for (m in c('WT', 'Foxa1-LOF')){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  if (nrow(x) > 15){
+    ml[[m]] <- x
+  }
+}
+all <- data.table::rbindlist(ml)
+all$mut[grep('WT', all$mutation)] <- df[grep('WT', df$mutation), 'pattern'] 
+enhancers <- all
+```
+
+```{r}
+table(all[-which(is.na(all$CD73_LogFC)), 'mut'])
+```
+
+```{r}
+ggplot(enhancers, aes(x = reorder(mut, CD73_AR_LogFC, FUN = median, na.rm = TRUE), y = CD73_AR_LogFC, fill=reorder(mut, CD73_AR_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE), y = CD73_LogFC, fill=reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, CD73High_LogFC, FUN = median, na.rm = TRUE), y = CD73High_LogFC, fill=reorder(mut, CD73High_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, CD73Low_LogFC, FUN = median, na.rm = TRUE), y = CD73Low_LogFC, fill=reorder(mut, CD73Low_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, mean_CD73, FUN = median, na.rm = TRUE), y = mean_CD73, fill=reorder(mut, mean_CD73, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+```
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/CD73_violin_plot_by_class.pdf')
+x <- enhancers[which(enhancers$CD73_LogFC > -5)]
+x <- x[which(x$CD73_LogFC < 5)]
+x[which(x$mut == 'CTRL'), 'CD73_LogFC'] <- 3.93
+ggplot(x, aes(x = reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE), y = CD73_LogFC, fill=reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(c(-6,6))
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/CD73_boxplot_by_class.pdf')
+x <- enhancers[which(enhancers$CD73_LogFC > -5)]
+x <- x[which(x$CD73_LogFC < 5)]
+x[which(x$mut == 'CTRL'), 'CD73_LogFC'] <- 3.93
+ggplot(x, aes(x = reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE), y = CD73_LogFC, fill=reorder(mut, CD73_LogFC, FUN = median, na.rm = TRUE))) + geom_boxplot() + theme_bw() + ylab('CD73 Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(c(-6,6))
+dev.off()
+```
+
+```{r}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+ml <- list()
+t <- table(as.vector(unlist(strsplit(df$mutation_edited, split = "_"))))
+t <- t[which(t > 5)]
+mut <- names(t)
+mut <- mut[-which(mut == 'Ets-LOF')]
+#mut <- names(table(as.vector(unlist(strsplit(df$mutation_edited, split = "_")))))
+for (m in mut){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  if(nrow(x) > 15){
+    ml[[m]] <- x
+  }
+}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_no_nanopore.RDS')
+for (m in c('Foxa1-LOF')){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  if (nrow(x) > 15){
+    ml[[m]] <- x
+  }
+}
+all <- data.table::rbindlist(ml)
+all$mut[grep('WT', all$mutation)] <- df[grep('WT', df$mutation), 'pattern'] 
+enhancers <- all
+```
+
+
+```{r}
+table(all[-which(is.na(all$Ecad_LogFC)), 'mut'])
+```
+
+```{r}
+ggplot(enhancers, aes(x = reorder(mut, Ecad_AR_LogFC, FUN = median, na.rm = TRUE), y = Ecad_AR_LogFC, fill=reorder(mut, Ecad_AR_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, Ecad_LogFC, FUN = median, na.rm = TRUE), y = Ecad_LogFC, fill=reorder(mut, Ecad_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, EcadLow_LogFC, FUN = median, na.rm = TRUE), y = EcadLow_LogFC, fill=reorder(mut, EcadLow_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, EcadHigh_LogFC, FUN = median, na.rm = TRUE), y = EcadHigh_LogFC, fill=reorder(mut, EcadHigh_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+
+ggplot(enhancers, aes(x = reorder(mut, mean_Ecad, FUN = median, na.rm = TRUE), y = mean_Ecad, fill=reorder(mut, mean_Ecad, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Ecad_violin_plot_by_class.pdf')
+x <- enhancers[which(enhancers$Ecad_LogFC > -5)]
+x[which(x$mut == 'CTRL'), 'Ecad_LogFC'] <- 4.99
+x <- x[which(x$Ecad_LogFC < 5)]
+#x <- x[which(x$Ecad_padj < 0.7)]
+ggplot(x, aes(x = reorder(mut, Ecad_LogFC, FUN = median, na.rm = TRUE), y = Ecad_LogFC, fill=reorder(mut, Ecad_LogFC, FUN = median, na.rm = TRUE))) + geom_boxplot() + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(c(-6,6))
+dev.off()
+```
+
+```{r}
+#pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/CD73_violin_plot_by_class.pdf')
+x <- enhancers[which(enhancers$EcadLow_LogFC > -5)]
+x <- x[which(x$EcadLow_LogFC < 5)]
+x[which(x$mut == 'CTRL'), 'EcadLow_LogFC'] <- 0.2
+ggplot(x, aes(x = reorder(mut, EcadLow_LogFC, FUN = median, na.rm = TRUE), y = EcadLow_LogFC, fill=reorder(mut, EcadLow_LogFC, FUN = median, na.rm = TRUE))) + geom_boxplot() + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(c(-6,6))
+#dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/All classes_Mouse48hr_flipped.pdf')
+ggplot(enhancers, aes(x = reorder(mut, CD_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/All classes_HepG2_flipped.pdf')
+ggplot(enhancers, aes(x = reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+dev.off()
+
+ggplot(enhancers, aes(x = reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+ggplot(enhancers, aes(x = reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+```
+
+# 9. Correlation plot between DL and mouse 48hr indicating the mutations
+
+```{r}
+.distinctColorPalette <-function(k) {
+  set.seed(123)
+  if(packageVersion("scales") >= '1.1.0'){
+    ColorSpace <- t(unique(col2rgb(scales::hue_pal(l=85)(2e3))))
+  } else {
+    ColorSpace <- t(unique(col2rgb(scales::hue_pal(l=60:100)(2e3))))
+  }
+  km <- kmeans(ColorSpace, k, iter.max=20)
+  colors <- rgb(round(km$centers), maxColorValue=255)
+  return(colors)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_no_nanopore.RDS')
+x <- enhancers[,c('Ecad_AR_LogFC', 'CD73_AR_LogFC')]
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- ''
+  df$z[-grep(pos, common_regions)] <- ''
+  df$z[grep('Shuffle', common_regions)] <- ''
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  p <- ggplot(df, aes(x,y, colour=color)) +
+    geom_point() +
+    geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name)
+  #print(p)
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad_AR/', name, '.pdf'), height=8, width=8)
+  print(p)
+  dev.off()
+  print(p)
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad_coloring_AR/', name, '.pdf'), height=8, width=8)
+  df$z[which(df$z == '')] <- 'N'
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  #print(p)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+x <- enhancers[,c('Ecad_LogFC', 'CD73Low_LogFC')]
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- ''
+  df$z[-grep(pos, common_regions)] <- ''
+  df$z[grep('Shuffle', common_regions)] <- ''
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  p <- ggplot(df, aes(x,y, colour=color)) +
+    geom_point() +
+    geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name)
+  #print(p)
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad/', name, '.pdf'), height=8, width=8)
+  print(p)
+  dev.off()
+  print(p)
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad_coloring/', name, '.pdf'), height=8, width=8)
+  df$z[which(df$z == '')] <- 'N'
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  #print(p)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS_no_nanopore.RDS')
+x <- enhancers[,c('EcadLow_LogFC', 'CD73Low_LogFC')]
+x[grep('AldoB', rownames(x)), 'EcadLow_LogFC'] <- enhancers[grep('AldoB', rownames(x)), 'Ecad_LogFC']
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- ''
+  df$z[-grep(pos, common_regions)] <- ''
+  df$z[grep('Shuffle', common_regions)] <- ''
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  p <- ggplot(df, aes(x,y, colour=color)) +
+    geom_point() +
+    geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name)
+  #print(p)
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad_LOW_np/', name, '.pdf'), height=8, width=8)
+  print(p)
+  dev.off()
+  print(p)
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecad_coloring_LOW_np/', name, '.pdf'), height=8, width=8)
+  df$z[which(df$z == '')] <- 'N'
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  #print(p)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+x <- enhancers[,c('EcadLow_LogFC', 'CD73Low_LogFC')]
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- ''
+  df$z[-grep(pos, common_regions)] <- ''
+  df$z[grep('Shuffle', common_regions)] <- ''
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  p <- ggplot(df, aes(x,y, colour=color)) +
+    geom_point() +
+    geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("Ecad LogFC") + ylab("CD73 LogFC") + ggtitle(name)
+  #print(p)
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecadhigh/', name, '.pdf'), height=8, width=8)
+  print(p)
+  dev.off()
+  print(p)
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/cd73_vs_ecadhigh_coloring/', name, '.pdf'), height=8, width=8)
+  df$z[which(df$z == '')] <- 'N'
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("HepG2 LogFC") + ylab("Mouse LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  #print(p)
+}
+```
+
+# 10. Make barplots with change per enhancer
+
+```{r, fig.height = 32, fig.width = 24}
+#pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/facs_all_barplots.pdf', height=32, width=24)
+x <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+range01 <- function(x){(x-min(x))/(max(x)-min(x))}
+par(mfrow=c(8,6))
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+x <- x[,c('CD73Low_LogFC', 'EcadLow_LogFC', "mutation_edited")]
+enhancer_coords <- sapply(strsplit(rownames(x), split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", rownames(x))
+coordinates_taken <- paste0(sapply(strsplit(rownames(x), split = "_"), tail, 3)[1,], '_',sapply(strsplit(rownames(x), split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+
+data_name <- vector()
+data_value <- vector()
+pdata_pp <- vector()
+pdata_pc <- vector()
+for (name in unique(enhancers)[c(1:2, 4:40)]){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  sub <- x[grep(enhancer, rownames(x)),]
+  sub <- sub[grep(pos, rownames(sub)),]
+  sub <- sub[complete.cases(sub),]
+  sub$log2FoldChange <- sub$CD73Low_LogFC+abs(min(sub$CD73Low_LogFC))+1
+  
+  if (length(grep('Shuffle', rownames(sub))) > 0){
+    sub <- sub[-grep('Shuffle', rownames(sub)),]
+  }
+  control_value <- sub[grep('WT', rownames(sub)), 'log2FoldChange']
+  if (length(control_value) > 0){
+      if (length(control_value) > 1){
+        control_value <- mean(control_value)
+       }
+    data_name <- c(data_name, rownames(sub))
+    data_value <- c(data_value, sub$log2FoldChange/control_value)
+    print('H')
+    pdata <- scale(sub$log2FoldChange/control_value)
+    if (length(pdata) > 1){
+        names(pdata) <- rownames(sub)
+        r <- pdata
+        names(pdata) <- sub("^([^_]+_[^_]+)_.*", "\\1", names(pdata))
+        names(pdata) <- sub(paste0(enhancer, '_'), "", names(pdata))
+        pdata <- rev(sort(pdata))
+        col <- rep('grey', length(pdata))
+        col[which(pdata > 1)] <- 'forestgreen'
+        col[which(pdata < 1)] <- 'brown1'
+        par(mar=c(20,6,1,1))
+        par(las=2)
+        barplot(pdata, col=col, ylab='CD73 LogFC', main=name)
+        pdata_pc <- c(pdata_pc, r)
+    }
+  }
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  sub <- x[grep(enhancer, rownames(x)),]
+  sub <- sub[grep(pos, rownames(sub)),]
+  sub <- sub[complete.cases(sub),]
+  sub$log2FoldChange <- sub$EcadLow_LogFC+abs(min(sub$EcadLow_LogFC))+1
+  
+  if (length(grep('Shuffle', rownames(sub))) > 0){
+    sub <- sub[-grep('Shuffle', rownames(sub)),]
+  }
+  control_value <- sub[grep('WT', rownames(sub)), 'log2FoldChange']
+  if (length(control_value) > 0){
+      if (length(control_value) > 1){
+        control_value <- mean(control_value)
+       }
+    data_name <- c(data_name, rownames(sub))
+    data_value <- c(data_value, sub$log2FoldChange/control_value)
+    print('M')
+    pdata <- scale(sub$log2FoldChange/control_value)
+    if (length(pdata) > 1){
+        names(pdata) <- rownames(sub)
+        r <- pdata
+        names(pdata) <- sub("^([^_]+_[^_]+)_.*", "\\1", names(pdata))
+        names(pdata) <- sub(paste0(enhancer, '_'), "", names(pdata))
+        pdata <- rev(sort(pdata))
+        col <- rep('grey', length(pdata))
+        col[which(pdata > 1)] <- 'forestgreen'
+        col[which(pdata < 1)] <- 'brown1'
+        par(mar=c(20,6,1,1))
+        par(las=2)
+        barplot(pdata, main=name, col=col, ylab='Ecad LogFC')
+        names(pdata) <- rev(rownames(sub))
+        pdata_pp <- c(pdata_pp, r)
+    }
+  }
+}
+#dev.off()
+```
+
+```{r}
+sel <- c('chr1:153770263−153770763', 'chr1:153770263−153770763', 'chr7:26843348−26843848', 'chr8:106588720−106589220',  "chr10:24918560-24919060", "chr7:26843348-26843848_Cyp2a5", "chr8:48535773-48536273", "chr13:109722708-109723208", "chr15:4678479-4678979", "chr19:43793907-43794407")
+pdata_pc <- pdata_pc[grep(paste(sel, collapse='|'), names(pdata_pc), value=TRUE)]
+pdata_pp <- pdata_pp[grep(paste(sel, collapse='|'), names(pdata_pp), value=TRUE)]
+```
+
+
+```{r}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+df$shift_cd73_wt <- pdata_pc[rownames(df)]
+df$shift_ecad_wt <- pdata_pp[rownames(df)]
+```
+
+```{r}
+library(ggpubr)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c('PP' = "#9CA700", 'PC'="#00C08E", 'Hnf1a-GOF'='#fbb922', 'Hnf1a-LOF'='#fbb922', 'Tcf7l1/2-LOF'='#ec6730', 'Tcf7l1/2-GOF'='#ec6730', 'Tbx3-LOF'='#f7bfca', 'Tbx3-GOF'='#f7bfca', 'Cebpa-GOF'='#4783c4', 'Cebpa-LOF'='#4783c4', 'Foxa1-LOF'='#e94647', 'Foxa1-GOF'='#e94647', 'Hnf4a-GOF'='#278d37', 'Hnf4a-LOF'='#278d37', 'Onecut1-LOF'='#6d4796', 'Onecut1-GOF'='#6d4796')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+ml <- list()
+t <- table(as.vector(unlist(strsplit(df$mutation_edited, split = "_"))))
+t <- t[which(t > 5)]
+mut <- names(t)
+mut <- mut[-which(mut == 'Ets-LOF')]
+#mut <- names(table(as.vector(unlist(strsplit(df$mutation_edited, split = "_")))))
+for (m in mut){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  ml[[m]] <- x
+  
+}
+all <- data.table::rbindlist(ml)
+#all <- all[-grep('WT', all$mutation)] 
+#all <- all[-grep('Shuffle', all$mutation)] 
+enhancers <- all
+```
+
+```{r}
+x1 <- enhancers[,c('mut', 'shift_cd73_wt')]
+colnames(x1) <- c('mut', 'value')
+x1$type <- rep('CD73', nrow(x1))
+x2 <- enhancers[,c('mut', 'shift_ecad_wt')]
+colnames(x2) <- c('mut', 'value')
+x2$type <- rep('Ecad', nrow(x2))
+x <- rbind(x1, x2)
+x <- x[-which(x$mut %in% c('Hnf4a-GOF', 'Onecut1-GOF', 'Onecut1-LOF', 'Tbx3-GOF', 'Shuffle', 'WT')),]
+#x <- x[complete.cases(x),]
+
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/shift_plot.pdf')
+ggplot(x, aes(x = mut, y = value, fill=type)) + geom_boxplot() + theme_bw() + xlab("Region type") + ylab('Normalized change versus WT') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + geom_text(aes(label=..count..), y=2.2, stat='count', colour="black", size=4) + ylim(c(0,max(x$value)))
+dev.off()
+
+x <- x[which(x$value > 0.5)]
+m <- 'Tbx3-LOF'
+y <- x[which(x$mut == m), ]
+z <- y[which(y$type == 'Ecad'), 'value']
+w <- y[which(y$type == 'CD73'), 'value']
+wilcox.test(as.vector(unlist(w)),as.vector(unlist(z)), 'greater')
+t.test(as.vector(unlist(w)),as.vector(unlist(z)), 'greater')
+```
+```{r}
+x <- x[which(x$value > -1)]
+m <- 'Tbx3-LOF'
+y <- x[which(x$mut == m), ]
+z <- y[which(y$type == 'Ecad'), 'value']
+w <- y[which(y$type == 'CD73'), 'value']
+wilcox.test(as.vector(unlist(w)),as.vector(unlist(z)), 'greater')
+t.test(as.vector(unlist(w)),as.vector(unlist(z)), 'greater')
+```
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk_wFACS.RDS')
+enhancers <- enhancers[,-(c(grep('_AR_', colnames(enhancers)), grep('24hr', colnames(enhancers)), grep('mean_', colnames(enhancers))))]
+library(seqinr)
+fasta <- read.fasta('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/new_regions_CS/Shendure_shuffle_PP_PC_library_region_good_header_258bp_with_bcs_with_plasmid_sequence.fa')
+x <- toupper(as.vector(unlist(getSequence(fasta, as.string=T))))
+names(x) <- names(fasta)
+enhancers$sequence <- x[rownames(enhancers)]
+write.xlsx(enhancers, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/TableS3.xlsx')
+```
+
+
+
+
+
+
+

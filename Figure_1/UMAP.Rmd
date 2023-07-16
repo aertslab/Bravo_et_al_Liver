@@ -1,0 +1,796 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Corrected UMAP
+
+```{r}
+library(SCopeLoomR)
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/data/RNA+Multiome_integrated_HQ-6.loom'
+loom <- open_loom(loom_file)
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`HVG UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+# Color UMAP by cell type
+rna_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+
+# Get color variable
+library("scales")
+n <- length(unique(cell_data$Refined_cell_type))
+rna_colvar <- hue_pal()(n)   
+names(rna_colvar) <- sort(unique(cell_data$Refined_cell_type))
+
+
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom')
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`harmony_probability_UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+# Color UMAP by cell type
+atac_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+# Format colors to match with snRNA-seq map
+atac_colvar <- rna_colvar[which(names(rna_colvar) %in% unique(cell_data$Refined_cell_type_ATAC))]
+atac_colvar <- atac_colvar[sort(names(atac_colvar))]
+atac_colvar['DBL'] <- "grey"
+atac_colvar['Hep_PP_PC_2'] <- "#00B813"
+atac_colvar['Hep_PP_PC_3'] <- "#00C08E"
+x <- atac_cell_plot_data
+y <- rna_cell_plot_data
+```
+
+```{r}
+atac_cell_plot_data <- x
+rna_cell_plot_data <- y
+unique(sapply(strsplit(rownames(atac_cell_plot_data), split = "-"), "[", 3))
+unique(sapply(strsplit(rownames(rna_cell_plot_data), split = "-"), "[", 2))
+
+rownames(rna_cell_plot_data) <- gsub("-TEW__043783__523d9c__Multiome_Liver_10xprotocol", "-1-TEW__043783__Mouse_4_Multiome_10x",rownames(rna_cell_plot_data))
+rownames(rna_cell_plot_data) <- gsub("-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", "-1-TEW__ebb273__Mouse_5_Multiome_NST",rownames(rna_cell_plot_data))
+
+
+rownames(rna_cell_plot_data)[grep("-1-TEW__ebb273__Mouse_5_Multiome_NST", rownames(rna_cell_plot_data))][1]
+rownames(atac_cell_plot_data)[grep("-1-TEW__ebb273__Mouse_5_Multiome_NST", rownames(atac_cell_plot_data))][1]
+unique(sapply(strsplit(rownames(rna_cell_plot_data), split = "-"), "[", 3))
+
+x <- atac_cell_plot_data
+y <- rna_cell_plot_data
+```
+
+```{r}
+atac_cell_plot_data <- x
+rna_cell_plot_data <- y
+atac_cell_plot_data$Refined_cell_type_ATAC <- paste0('ATAC_', atac_cell_plot_data$Refined_cell_type_ATAC)
+rna_cell_plot_data$Refined_cell_type <- paste0('RNA_', rna_cell_plot_data$Refined_cell_type)
+atac_cell_plot_data <- atac_cell_plot_data[,c('UMAP_1', 'UMAP_2', 'Refined_cell_type_ATAC')]
+colnames(atac_cell_plot_data) <- c('UMAP_1', 'UMAP_2', 'Refined_cell_type')
+rna_cell_plot_data <- rna_cell_plot_data[,c('UMAP_1', 'UMAP_2', 'Refined_cell_type')]
+names(atac_colvar) <- paste0('ATAC_', names(atac_colvar))
+names(rna_colvar) <- paste0('RNA_', names(rna_colvar))
+colvar <- c(atac_colvar, rna_colvar)
+atac_cell_plot_data$UMAP_2 <- atac_cell_plot_data$UMAP_2-32
+atac_cell_plot_data$UMAP_1 <- atac_cell_plot_data$UMAP_1-5
+atac_cell_plot_data$paired <- rownames(atac_cell_plot_data)
+rna_cell_plot_data$paired <- rownames(rna_cell_plot_data)
+```
+
+```{r}
+cell_plot_data <- rbind(rna_cell_plot_data, atac_cell_plot_data)
+cell_plot_data$paired[sample(grep('Hep', cell_plot_data$Refined_cell_type), 25000)] <- paste0('Hep_',sample(grep('Hep', cell_plot_data$Refined_cell_type), 25000))
+
+nr <- round(length(grep('HSC', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('HSC', cell_plot_data$Refined_cell_type), nr)] <- paste0('HSC_',sample(grep('HSC', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('LSEC', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('LSEC', cell_plot_data$Refined_cell_type), nr)] <- paste0('LSEC_',sample(grep('LSEC', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('Kupffer', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('Kupffer', cell_plot_data$Refined_cell_type), nr)] <- paste0('Kupffer_',sample(grep('Kupffer', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('ATAC_DBL', cell_plot_data$Refined_cell_type)))*1
+cell_plot_data$paired[sample(grep('ATAC_DBL', cell_plot_data$Refined_cell_type), nr)] <- paste0('ATAC_DBL_',sample(grep('ATAC_DBL', cell_plot_data$Refined_cell_type), nr))
+```
+
+```{r}
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=Refined_cell_type)) + geom_line(aes(group = paired), size=0.1,  alpha=.2) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_RNA_ATAC_linked.png'), device='png', bg = "transparent",
+     width=7, height=14)
+```
+
+## Same but with uncorrected UMAP
+
+- Add uncorrected UMAP coordinates to loom
+
+```{r}
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-6.loom'
+loom <- open_loom(loom_path)
+dgem <- get_dgem(loom)
+cell_annot <- get_cell_annotation(loom)
+umap_embedding <- get_embedding_by_name(loom, 'HVG UMAP')
+colnames(umap_embedding) <- c('UMAP_1', 'UMAP_2')
+rm(loom)
+# Run Seurat
+library(Seurat)
+Seurat_RNA <- CreateSeuratObject(dgem, meta.data=cell_annot)
+Seurat_RNA <- NormalizeData(Seurat_RNA, normalization.method = "LogNormalize", scale.factor = 10000)
+Seurat_RNA <- FindVariableFeatures(Seurat_RNA, selection.method = "vst")
+Seurat_RNA <- ScaleData(Seurat_RNA)
+Seurat_RNA <- RunPCA(object = Seurat_RNA, verbose = FALSE, npcs=50)
+#source("/staging/leuven/stg_00002/lcb/cbravo/Barrel_Cortex/Cortex_Linnarson/Seurat_aux/Seurat_Utils.R")
+#data.use <- PrepDR(object = Seurat_RNA , use.imputed = F, assay.type = "RNA")
+#nPC <- PCA_estimate_nPC(data.use, whereto="/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/rna_nPC_selection.Rds", to.nPC = 50, k=3, by.nPC=1)
+nPC <- 20
+#29
+Seurat_RNA <- RunUMAP(Seurat_RNA, dims=1:nPC)
+DimPlot(Seurat_RNA, reduction = "umap", group.by='Refined_cell_type', label=TRUE) + NoLegend()
+DimPlot(Seurat_RNA, reduction = "umap", group.by='sample_id', label=TRUE) + NoLegend()
+```
+```{r}
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-8.loom'
+loom <- open_loom(loom_path, mode='r+')
+add_embedding(loom = loom, embedding=Embeddings(Seurat_RNA, reduction='umap')[colnames(Seurat_RNA),], name='Uncorrected UMAP')
+flush(loom)
+```
+
+```{r}
+library(SCopeLoomR)
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-9.loom'
+loom <- open_loom(loom_file)
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`Uncorrected UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+# Color UMAP by cell type
+rna_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+
+# Get color variable
+library("scales")
+n <- length(unique(cell_data$Refined_cell_type))
+rna_colvar <- hue_pal()(n)   
+names(rna_colvar) <- sort(unique(cell_data$Refined_cell_type))
+
+
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom')
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`probability_UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+# Color UMAP by cell type
+atac_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+# Format colors to match with snRNA-seq map
+atac_colvar <- rna_colvar[which(names(rna_colvar) %in% unique(cell_data$Refined_cell_type_ATAC))]
+atac_colvar <- atac_colvar[sort(names(atac_colvar))]
+atac_colvar['DBL'] <- "grey"
+atac_colvar['Hep_PP_PC_2'] <- "#00B813"
+atac_colvar['Hep_PP_PC_3'] <- "#00C08E"
+x <- atac_cell_plot_data
+y <- rna_cell_plot_data
+```
+
+```{r}
+atac_cell_plot_data <- x
+rna_cell_plot_data <- y
+unique(sapply(strsplit(rownames(atac_cell_plot_data), split = "-"), "[", 3))
+unique(sapply(strsplit(rownames(rna_cell_plot_data), split = "-"), "[", 2))
+
+rownames(rna_cell_plot_data) <- gsub("-TEW__043783__523d9c__Multiome_Liver_10xprotocol", "-1-TEW__043783__Mouse_4_Multiome_10x",rownames(rna_cell_plot_data))
+rownames(rna_cell_plot_data) <- gsub("-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", "-1-TEW__ebb273__Mouse_5_Multiome_NST",rownames(rna_cell_plot_data))
+
+
+rownames(rna_cell_plot_data)[grep("-1-TEW__ebb273__Mouse_5_Multiome_NST", rownames(rna_cell_plot_data))][1]
+rownames(atac_cell_plot_data)[grep("-1-TEW__ebb273__Mouse_5_Multiome_NST", rownames(atac_cell_plot_data))][1]
+unique(sapply(strsplit(rownames(rna_cell_plot_data), split = "-"), "[", 3))
+
+x <- atac_cell_plot_data
+y <- rna_cell_plot_data
+```
+
+```{r}
+atac_cell_plot_data <- x
+rna_cell_plot_data <- y
+atac_cell_plot_data$Refined_cell_type_ATAC <- paste0('ATAC_', atac_cell_plot_data$Refined_cell_type_ATAC)
+rna_cell_plot_data$Refined_cell_type <- paste0('RNA_', rna_cell_plot_data$Refined_cell_type)
+atac_cell_plot_data <- atac_cell_plot_data[,c('UMAP_1', 'UMAP_2', 'Refined_cell_type_ATAC')]
+colnames(atac_cell_plot_data) <- c('UMAP_1', 'UMAP_2', 'Refined_cell_type')
+rna_cell_plot_data <- rna_cell_plot_data[,c('UMAP_1', 'UMAP_2', 'Refined_cell_type')]
+names(atac_colvar) <- paste0('ATAC_', names(atac_colvar))
+names(rna_colvar) <- paste0('RNA_', names(rna_colvar))
+colvar <- c(atac_colvar, rna_colvar)
+atac_cell_plot_data$UMAP_2 <- atac_cell_plot_data$UMAP_2-36
+atac_cell_plot_data$UMAP_1 <- atac_cell_plot_data$UMAP_1-5
+atac_cell_plot_data$paired <- rownames(atac_cell_plot_data)
+rna_cell_plot_data$paired <- rownames(rna_cell_plot_data)
+```
+
+```{r}
+cell_plot_data <- rbind(rna_cell_plot_data, atac_cell_plot_data)
+cell_plot_data$paired[sample(grep('Hep', cell_plot_data$Refined_cell_type), 25000)] <- paste0('Hep_',sample(grep('Hep', cell_plot_data$Refined_cell_type), 25000))
+
+nr <- round(length(grep('HSC', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('HSC', cell_plot_data$Refined_cell_type), nr)] <- paste0('HSC_',sample(grep('HSC', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('LSEC', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('LSEC', cell_plot_data$Refined_cell_type), nr)] <- paste0('LSEC_',sample(grep('LSEC', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('Kupffer', cell_plot_data$Refined_cell_type)))*0.6
+cell_plot_data$paired[sample(grep('Kupffer', cell_plot_data$Refined_cell_type), nr)] <- paste0('Kupffer_',sample(grep('Kupffer', cell_plot_data$Refined_cell_type), nr))
+
+nr <- round(length(grep('ATAC_DBL', cell_plot_data$Refined_cell_type)))*1
+cell_plot_data$paired[sample(grep('ATAC_DBL', cell_plot_data$Refined_cell_type), nr)] <- paste0('ATAC_DBL_',sample(grep('ATAC_DBL', cell_plot_data$Refined_cell_type), nr))
+```
+
+```{r}
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=Refined_cell_type)) + geom_line(aes(group = paired), size=0.1,  alpha=.2) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_RNA_ATAC_linked_uncorrected.png'), device='png', bg = "transparent",
+     width=7, height=14)
+```
+
+# Uncorrected RNA by sample, mouse, technique, state
+
+```{r}
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-6.loom'
+loom <- open_loom(loom_path)
+dgem <- get_dgem(loom)
+cell_annot <- get_cell_annotation(loom)
+umap_embedding <- get_embedding_by_name(loom, 'HVG UMAP')
+colnames(umap_embedding) <- c('UMAP_1', 'UMAP_2')
+rm(loom)
+# Run Seurat
+library(Seurat)
+Seurat_RNA <- CreateSeuratObject(dgem, meta.data=cell_annot)
+Seurat_RNA <- NormalizeData(Seurat_RNA, normalization.method = "LogNormalize", scale.factor = 10000)
+Seurat_RNA <- FindVariableFeatures(Seurat_RNA, selection.method = "vst")
+Seurat_RNA <- ScaleData(Seurat_RNA)
+Seurat_RNA <- RunPCA(object = Seurat_RNA, verbose = FALSE, npcs=50)
+#source("/staging/leuven/stg_00002/lcb/cbravo/Barrel_Cortex/Cortex_Linnarson/Seurat_aux/Seurat_Utils.R")
+#data.use <- PrepDR(object = Seurat_RNA , use.imputed = F, assay.type = "RNA")
+#nPC <- PCA_estimate_nPC(data.use, whereto="/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/rna_nPC_selection.Rds", to.nPC = 50, k=3, by.nPC=1)
+nPC <- 20
+#29
+Seurat_RNA <- RunUMAP(Seurat_RNA, dims=1:nPC)
+DimPlot(Seurat_RNA, reduction = "umap", group.by='Refined_cell_type', label=TRUE) + NoLegend()
+DimPlot(Seurat_RNA, reduction = "umap", group.by='sample_id', label=TRUE) + NoLegend()
+```
+
+```{r}
+seurat_obj <- Seurat_RNA
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2)
+seurat_obj@meta.data$Refined_cell_type_agg <- seurat_obj@meta.data$Refined_cell_type
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Hep', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Hepatocytes'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('VEC', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'VEC'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Kupffer', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Kupffer'
+
+seurat_obj@meta.data$sample_id <- as.vector(seurat_obj@meta.data$sample_id)
+seurat_obj@meta.data$sample_id[grep('fresh_mouse1', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-1'
+seurat_obj@meta.data$sample_id[grep('fresh_mouse2', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-2'
+seurat_obj@meta.data$sample_id[grep('frozen_mouse2', seurat_obj@meta.data$sample_id)] <- 'snRNA_Frozen_Mouse-2'
+seurat_obj@meta.data$sample_id[grep('fresh_mouse3', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-3'
+seurat_obj@meta.data$sample_id[grep('Multiome_10x', seurat_obj@meta.data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+seurat_obj@meta.data$sample_id[grep('Multiome_NST', seurat_obj@meta.data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+
+my_levels <-   c('snRNA_Fresh_Mouse-1', 'snRNA_Fresh_Mouse-2', 'snRNA_Frozen_Mouse-2', 'snRNA_Fresh_Mouse-3',
+                      'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+seurat_obj@meta.data$sample_id <- factor(x = seurat_obj@meta.data$sample_id, levels = my_levels)
+colvar <- list() 
+colvar[['sample_id']] <- color
+names(colvar[['sample_id']]) <- my_levels
+
+seurat_obj@meta.data$mouse <- rep('BL6', ncol(seurat_obj))
+seurat_obj@meta.data$mouse[grep('Fresh_Mouse-1', seurat_obj@meta.data$sample_id)] <- 'CD1'
+colvar[['mouse']] <- c('orange', 'forestgreen')
+names(colvar[['mouse']]) <- c('BL6', 'CD1')
+
+seurat_obj@meta.data$technique <- rep('Multiome', ncol(seurat_obj))
+seurat_obj@meta.data$technique[grep('snRNA', seurat_obj@meta.data$sample_id)] <- 'snRNA'
+colvar[['technique']] <- c(c1[4], c2[2])
+names(colvar[['technique']]) <- c('snRNA', 'Multiome')
+
+seurat_obj@meta.data$state <- rep('Fresh', ncol(seurat_obj))
+seurat_obj@meta.data$state[grep('Frozen', seurat_obj@meta.data$sample_id)] <- 'Frozen'
+colvar[['state']] <- c('purple', 'pink')
+names(colvar[['state']]) <- c('Fresh', 'Frozen')
+```
+
+```{r}
+# Color UMAP by var
+rna_cell_plot_data <- cbind(seurat_obj[['umap']]@cell.embeddings, seurat_obj@meta.data)
+# Add new variables
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['sample_id']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_sample.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=mouse)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['mouse']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_mouse.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=state)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['state']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_state.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=technique)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['technique']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_technique.png'), device='png', bg = "transparent",
+     width=7, height=7)
+```
+
+# Corrected RNA by sample, mouse, technique, state
+
+```{r}
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/data/RNA+Multiome_integrated_HQ-6.loom')
+dgem <- get_dgem(loom)
+cell_data <- get_cell_annotation(loom)
+library(Seurat)
+seurat_obj <- CreateSeuratObject(dgem, meta.data = cell_data)
+```
+
+```{r}
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2)
+seurat_obj@meta.data$Refined_cell_type_agg <- seurat_obj@meta.data$Refined_cell_type
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Hep', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Hepatocytes'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('VEC', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'VEC'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Kupffer', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Kupffer'
+
+seurat_obj@meta.data$sample_id <- as.vector(seurat_obj@meta.data$sample_id)
+seurat_obj@meta.data$sample_id[grep('fresh_mouse1', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-1'
+seurat_obj@meta.data$sample_id[grep('fresh_mouse2', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-2'
+seurat_obj@meta.data$sample_id[grep('frozen_mouse2', seurat_obj@meta.data$sample_id)] <- 'snRNA_Frozen_Mouse-2'
+seurat_obj@meta.data$sample_id[grep('fresh_mouse3', seurat_obj@meta.data$sample_id)] <- 'snRNA_Fresh_Mouse-3'
+seurat_obj@meta.data$sample_id[grep('Multiome_10x', seurat_obj@meta.data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+seurat_obj@meta.data$sample_id[grep('Multiome_NST', seurat_obj@meta.data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+
+my_levels <-   c('snRNA_Fresh_Mouse-1', 'snRNA_Fresh_Mouse-2', 'snRNA_Frozen_Mouse-2', 'snRNA_Fresh_Mouse-3',
+                      'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+seurat_obj@meta.data$sample_id <- factor(x = seurat_obj@meta.data$sample_id, levels = my_levels)
+colvar <- list() 
+colvar[['sample_id']] <- color
+names(colvar[['sample_id']]) <- my_levels
+
+seurat_obj@meta.data$mouse <- rep('BL6', ncol(seurat_obj))
+seurat_obj@meta.data$mouse[grep('Fresh_Mouse-1', seurat_obj@meta.data$sample_id)] <- 'CD1'
+colvar[['mouse']] <- c('orange', 'forestgreen')
+names(colvar[['mouse']]) <- c('BL6', 'CD1')
+
+seurat_obj@meta.data$technique <- rep('Multiome', ncol(seurat_obj))
+seurat_obj@meta.data$technique[grep('snRNA', seurat_obj@meta.data$sample_id)] <- 'snRNA'
+colvar[['technique']] <- c(c1[4], c2[2])
+names(colvar[['technique']]) <- c('snRNA', 'Multiome')
+
+seurat_obj@meta.data$state <- rep('Fresh', ncol(seurat_obj))
+seurat_obj@meta.data$state[grep('Frozen', seurat_obj@meta.data$sample_id)] <- 'Frozen'
+colvar[['state']] <- c('purple', 'pink')
+names(colvar[['state']]) <- c('Fresh', 'Frozen')
+```
+
+```{r}
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/data/RNA+Multiome_integrated_HQ-6.loom'
+loom <- open_loom(loom_file)
+
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`HVG UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+```
+
+```{r}
+# Color UMAP by var
+rna_cell_plot_data <- cbind(gene_umap, seurat_obj@meta.data)
+# Add new variables
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['sample_id']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_sample.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=mouse)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['mouse']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_mouse.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=state)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['state']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_state.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=technique)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['technique']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_technique.png'), device='png', bg = "transparent",
+     width=7, height=7)
+```
+
+
+# Uncorrected ATAC by sample, mouse, technique, state
+
+```{r}
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom')
+dgem <- get_dgem(loom)
+cell_data <- get_cell_annotation(loom)
+library(Seurat)
+seurat_obj <- CreateSeuratObject(dgem, meta.data = cell_data)
+```
+```{r}
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')[2:3]
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2)
+
+seurat_obj@meta.data$Refined_cell_type_agg <- seurat_obj@meta.data$Refined_cell_type_ATAC
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Hep', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Hepatocytes'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('VEC', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'VEC'
+seurat_obj@meta.data$Refined_cell_type_agg[grep('Kupffer', seurat_obj@meta.data$Refined_cell_type_agg)] <- 'Kupffer'
+
+seurat_obj@meta.data$sample_id <- as.vector(seurat_obj@meta.data$sample_id)
+seurat_obj@meta.data$sample_id[grep('10x_ATAC_Run_1', seurat_obj@meta.data$sample_id)] <- 'snATAC_Fresh_Mouse-6'
+seurat_obj@meta.data$sample_id[grep('10x_ATAC_Run_2', seurat_obj@meta.data$sample_id)] <- 'snATAC_Fresh_Mouse-7'
+seurat_obj@meta.data$sample_id[grep('TEW__043783__Mouse_4_Multiome_10x', seurat_obj@meta.data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+seurat_obj@meta.data$sample_id[grep('Multiome_NST', seurat_obj@meta.data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+
+my_levels <-   c('snATAC_Fresh_Mouse-6', 'snATAC_Fresh_Mouse-7', 'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+seurat_obj@meta.data$sample_id <- factor(x = seurat_obj@meta.data$sample_id, levels = my_levels)
+colvar <- list() 
+colvar[['sample_id']] <- color
+names(colvar[['sample_id']]) <- my_levels
+
+seurat_obj@meta.data$mouse <- rep('BL6', ncol(seurat_obj))
+colvar[['mouse']] <- c('orange', 'forestgreen')
+names(colvar[['mouse']]) <- c('BL6', 'CD1')
+
+seurat_obj@meta.data$technique <- rep('Multiome', ncol(seurat_obj))
+seurat_obj@meta.data$technique[grep('snATAC', seurat_obj@meta.data$sample_id)] <- 'snATAC'
+colvar[['technique']] <- c(c1[2], c2[2])
+names(colvar[['technique']]) <- c('snATAC', 'Multiome')
+
+seurat_obj@meta.data$state <- rep('Fresh', ncol(seurat_obj))
+colvar[['state']] <- c('purple', 'pink')
+names(colvar[['state']]) <- c('Fresh', 'Frozen')
+```
+
+```{r}
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom'
+loom <- open_loom(loom_file)
+
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`harmony_probability_UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+```
+
+```{r}
+# Color UMAP by var
+rna_cell_plot_data <- cbind(gene_umap, seurat_obj@meta.data)
+# Add new variables
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['sample_id']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_sample_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=mouse)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['mouse']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_mouse_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=state)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['state']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_state_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=technique)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['technique']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_corrected_by_technique_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+```
+
+```{r}
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom'
+loom <- open_loom(loom_file)
+
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`probability_UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+```
+
+```{r}
+# Color UMAP by var
+rna_cell_plot_data <- cbind(gene_umap, seurat_obj@meta.data)
+# Add new variables
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['sample_id']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_sample_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=mouse)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['mouse']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_mouse_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=state)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['state']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_state_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+
+# Create
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+p <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=technique)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = colvar[['technique']]) 
+# for hep: 0.1, alpha .005
+# for the rest: 0.1, alpha
+p 
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+ggsave(filename = paste0(path, 'Figure_uncorrected_by_technique_ATAC.png'), device='png', bg = "transparent",
+     width=7, height=7)
+```
+
+# Make spatial tsne
+
+```{r}
+source('/staging/leuven/stg_00002/lcb/cbravo/Barrel_Cortex/Common_aux/SCopeLoomR_forannot.R')
+library(hdf5r)
+library(Seurat)
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/Resolve_Liver.loom'
+loom <- open_loom(loom_file)
+library(SCopeLoomR)
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`Seurat UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+```
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+rna_colvar <- readRDS(paste0(path,'snRNA_celltype_colvar.RDS'))
+rna_colvar
+```
+
+```{r}
+table(cell_data$cell_type)
+cell_data$cell_type[grep('Hep_PP_PC_3', cell_data$cell_type)] <- 'Hep_PP_PC_2'
+cell_data$cell_type[grep('Hep_PP_PC_4', cell_data$cell_type)] <- 'Hep_PP_PC_3'
+cell_data$cell_type[grep('Hep_PP_PC_5', cell_data$cell_type)] <- 'Hep_PP_PC_4'
+cell_data$cell_type[grep('Hep_PP_PC_6', cell_data$cell_type)] <- 'Hep_PP_PC_5'
+cell_data$cell_type[grep('DC', cell_data$cell_type)] <- 'pDC'
+cell_data$cell_type[grep('LSEC', cell_data$cell_type)] <- 'LSEC'
+cell_data$cell_type[grep('Unk', cell_data$cell_type)] <- 'Unk'
+rna_colvar['Unk'] <- 'grey'
+rna_colvar['Hep_Immune'] <- '#8BD800'
+```
+
+```{r}
+table(cell_data$cell_type)
+
+rna_colvar[names(table(cell_data$cell_type))]
+```
+```{r}
+# Color UMAP by cell type
+rna_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+# Load functions
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+plot <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=cell_type)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + 
+  scale_fill_manual(values = rna_colvar)
+ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=cell_type)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = rna_colvar)
+ggsave(filename = paste0(path, 'Resolve_UMAP_no_labels.png'), device='png', bg = "transparent",
+       width=7, height=7)
+pdf(paste0(path, 'Resolve_UMAP_with_labels.pdf'))
+LabelClusters(plot, 'cell_type', split.by ='cell_type', box=FALSE, repel=TRUE) 
+dev.off()
+
+
+plot <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") 
+ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") 
+ggsave(filename = paste0(path, 'Resolve_UMAP_sample_no_labels.png'), device='png', bg = "transparent",
+       width=7, height=7)
+```
+
+```{r}
+source('/staging/leuven/stg_00002/lcb/cbravo/Barrel_Cortex/Common_aux/SCopeLoomR_forannot.R')
+library(hdf5r)
+library(Seurat)
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/Resolve_Liver.loom'
+loom <- open_loom(loom_file)
+library(SCopeLoomR)
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`Spatial`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+```
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+rna_colvar <- readRDS(paste0(path,'snRNA_celltype_colvar.RDS'))
+rna_colvar
+```
+
+```{r}
+table(cell_data$cell_type)
+cell_data$cell_type[grep('Hep_PP_PC_3', cell_data$cell_type)] <- 'Hep_PP_PC_2'
+cell_data$cell_type[grep('Hep_PP_PC_4', cell_data$cell_type)] <- 'Hep_PP_PC_3'
+cell_data$cell_type[grep('Hep_PP_PC_5', cell_data$cell_type)] <- 'Hep_PP_PC_4'
+cell_data$cell_type[grep('Hep_PP_PC_6', cell_data$cell_type)] <- 'Hep_PP_PC_5'
+cell_data$cell_type[grep('DC', cell_data$cell_type)] <- 'pDC'
+cell_data$cell_type[grep('LSEC', cell_data$cell_type)] <- 'LSEC'
+cell_data$cell_type[grep('Unk', cell_data$cell_type)] <- 'Unk'
+rna_colvar['Unk'] <- 'grey'
+rna_colvar['Hep_Immune'] <- '#8BD800'
+```
+
+```{r}
+table(cell_data$cell_type)
+
+rna_colvar[names(table(cell_data$cell_type))]
+```
+
+```{r}
+# Color UMAP by cell type
+rna_cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+# Load functions
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+plot <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=cell_type)) + geom_point(size = 1) + theme_classic() + theme(legend.position = "none") + 
+  scale_fill_manual(values = rna_colvar)
+ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=cell_type)) + geom_point(size = 1) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") + scale_color_manual(values = rna_colvar)
+ggsave(filename = paste0(path, 'Resolve_spatial_coord_no_labels.png'), device='png', bg = "transparent",
+       width=7, height=7)
+pdf(paste0(path, 'Resolve_UMAP_with_labels.pdf'))
+LabelClusters(plot, 'cell_type', split.by ='cell_type', box=FALSE, repel=TRUE) 
+dev.off()
+
+
+plot <- ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") 
+ggplot(rna_cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=sample_id)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") 
+ggsave(filename = paste0(path, 'Resolve_UMAP_sample_no_labels.png'), device='png', bg = "transparent",
+       width=7, height=7)
+```

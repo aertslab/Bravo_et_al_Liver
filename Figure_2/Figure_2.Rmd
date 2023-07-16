@@ -1,0 +1,789 @@
+---
+title: "Motif enrichment dot plot"
+output: html_notebook
+---
+
+
+# Panel A
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/pycistarget/cluster_db/Clean_topics/All/forR/'
+motif_enrichment_table_list <- list()
+for (file in list.files(path)){
+  name <- gsub('.tsv', '', file)
+  motif_enrichment_table_list[[name]] <- read.delim(paste0(path, file), sep='\t')
+  colnames(motif_enrichment_table_list[[name]][1]) <- 'Motif'
+}
+names(motif_enrichment_table_list) <- c('General', 'PC-Int', 'PC', 'PP')
+motif_enrichment_table_list <- motif_enrichment_table_list[c('General', 'PP', 'PC-Int', 'PC')]
+```
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/pycistarget/cluster_db/Topics/No_promoters/forR/'
+selected_topics <- c(17,75,38,11,81,82,71,21,32,27,64)
+for (file in paste0('Topic', selected_topics, '.tsv')){
+  name <- gsub('.tsv', '', file)
+  motif_enrichment_table_list[[name]] <- read.delim(paste0(path, file), sep='\t')
+  colnames(motif_enrichment_table_list[[name]][1]) <- 'Motif'
+}
+names(motif_enrichment_table_list) <- c('General', 'PP', 'PC-Int', 'PC', 'ZT00', 'ZT12', 'Kupffer', 'DC', 'B_cell', 'T_cell', 'LSEC', 'VEC', 'HSC', 'Fibroblast', 'BEC')
+motif_enrichment_table_list <- motif_enrichment_table_list[c('General', 'ZT00', 'ZT12', 'PP', 'PC-Int', 'PC', 'Kupffer', 'DC', 'B_cell', 'T_cell', 'LSEC', 'VEC', 'HSC', 'Fibroblast', 'BEC')]
+```
+
+```{r}
+# Create psedobulk matrix for these groups
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-10.loom')
+dgem <- get_dgem(loom)
+cell_data <- get_cell_annotation(loom)
+unique(cell_data$Refined_cell_type)
+cell_data$sample_id <- as.vector(cell_data$sample_id)
+cell_data$sample_id[grep('fresh_mouse1', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-1'
+cell_data$sample_id[grep('fresh_mouse2', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-2'
+cell_data$sample_id[grep('frozen_mouse2', cell_data$sample_id)] <- 'snRNA_Frozen_Mouse-2'
+cell_data$sample_id[grep('fresh_mouse3', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-3'
+cell_data$sample_id[grep('Multiome_10x', cell_data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+cell_data$sample_id[grep('Multiome_NST', cell_data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+
+General <- log(rowSums(dgem)/sum(rowSums(dgem))*10^6+1)
+Hepatocyte <- log(rowSums(dgem[,grep('Hep', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('Hep', cell_data$Refined_cell_type)]))*10^6+1)
+Non_parenchymal <- log(rowSums(dgem[,-grep('Hep', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,-grep('Hep', cell_data$Refined_cell_type)]))*10^6+1)
+Hepatocyte_PP <- log(rowSums(dgem[,c(grep('PC_1', cell_data$Refined_cell_type), grep('PC_2', cell_data$Refined_cell_type))])/sum(rowSums(dgem[,c(grep('PC_1', cell_data$Refined_cell_type), grep('PC_2', cell_data$Refined_cell_type))]))*10^6+1)
+Hepatocyte_Intermediate <- log(rowSums(dgem[,c(grep('PC_3', cell_data$Refined_cell_type), grep('PC_4', cell_data$Refined_cell_type), grep('PC_5', cell_data$Refined_cell_type))])/sum(rowSums(dgem[,c(grep('PC_3', cell_data$Refined_cell_type), grep('PC_4', cell_data$Refined_cell_type), grep('PC_5', cell_data$Refined_cell_type))]))*10^6+1)
+Hepatocyte_PC <- log(rowSums(dgem[,c(grep('PC_5', cell_data$Refined_cell_type))])/sum(rowSums(dgem[,c(grep('PC_5', cell_data$Refined_cell_type))]))*10^6+1)
+B_cell <- log(rowSums(dgem[,c(grep('B_cell', cell_data$Refined_cell_type))])/sum(rowSums(dgem[,c(grep('B_cell', cell_data$Refined_cell_type))]))*10^6+1)
+T_cell <- log(rowSums(dgem[,c(grep('T_cell', cell_data$Refined_cell_type))])/sum(rowSums(dgem[,c(grep('T_cell', cell_data$Refined_cell_type) )]))*10^6+1)
+Kupffer <- log(rowSums(dgem[,grep('Kupffer', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('Kupffer', cell_data$Refined_cell_type)]))*10^6+1)
+LSEC <- log(rowSums(dgem[,grep('LSEC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('LSEC', cell_data$Refined_cell_type)]))*10^6+1)
+HSC <- log(rowSums(dgem[,grep('HSC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('HSC', cell_data$Refined_cell_type)]))*10^6+1)
+Fibroblast <- log(rowSums(dgem[,grep('Fibroblast', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('Fibroblast', cell_data$Refined_cell_type)]))*10^6+1)
+BEC <- log(rowSums(dgem[,grep('BEC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('BEC', cell_data$Refined_cell_type)]))*10^6+1)
+MSC <- log(rowSums(dgem[,grep('MSC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('MSC', cell_data$Refined_cell_type)]))*10^6+1)
+VEC <- log(rowSums(dgem[,grep('VEC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('VEC', cell_data$Refined_cell_type)]))*10^6+1)
+DC <- log(rowSums(dgem[,grep('DC', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('DC', cell_data$Refined_cell_type)]))*10^6+1)
+ZT00 <- log(rowSums(dgem[,grep('snRNA', cell_data$sample_id)])/sum(rowSums(dgem[,grep('snRNA', cell_data$sample_id)]))*10^6+1)
+ZT12 <- log(rowSums(dgem[,grep('Multiome', cell_data$sample_id)])/sum(rowSums(dgem[,grep('Multiome', cell_data$sample_id)]))*10^6+1)
+
+rna_profile <- cbind(Hepatocyte, ZT00 ,ZT12, Hepatocyte_PP, Hepatocyte_Intermediate, Hepatocyte_PC, Kupffer, DC, B_cell, T_cell, LSEC, VEC, HSC, Fibroblast, BEC)
+rownames(rna_profile) <- rownames(dgem)
+rna_profile <- t(scale(t(rna_profile)))
+colnames(rna_profile) <- names(motif_enrichment_table_list)
+```
+
+```{r}
+library(RcisTarget)
+data("motifAnnotations_mgi")
+TF_list <- unique(as.vector(unlist(motifAnnotations_mgi$TF)))
+TF_data <- data.frame()
+for (TF in TF_list){
+  if (TF %in% rownames(rna_profile)){
+      for (name in names(motif_enrichment_table_list)){
+    sel_df <- motif_enrichment_table_list[[name]][which(rowSums(t(apply(motif_enrichment_table_list[[name]],1,function(u) grepl(TF,u)))) != 0),]
+    if (nrow(sel_df) > 0){
+      log_tf <- max(as.vector(unlist(sel_df$NES)))
+    } else {
+      log_tf <- 3
+    }
+      row_to_add <- t(as.data.frame(c(TF, name, log_tf, rna_profile[TF,name])))
+      TF_data <- rbind(TF_data, row_to_add)
+    }
+  } 
+}
+colnames(TF_data) <- c('TF', 'Cell_type', 'Motif', 'Expression')
+rownames(TF_data) <- NULL
+TF_data <- TF_data[rev(order(TF_data$Motif)),]
+TF_data_list <- split(TF_data, TF_data$Cell_type)
+TF_data_list <- TF_data_list[names(motif_enrichment_table_list)]
+sel_TFs <- vector()
+for (data in TF_data_list){
+  data$Score <- as.numeric(data$Expression) * as.numeric(data$Motif)
+  data <- data[rev(order(data$Score)),]
+  TFs <- data[1:10, 'TF']
+  sel_TFs <- unique(c(sel_TFs, TFs))
+}
+sel_TFs_1 <- sel_TFs
+```
+
+```{r}
+selected_TFs <- list()
+selected_TFs[['Hepatocytes']] <- c('Hnf1a', 'Ppara', 'Rxra', 'Nfia', 'Nfib', 'Hnf4a', 'Cebpa', 'Foxa1', 'Onecut1', 'Clock', 'Tbx3', 'Tcf7l2', 'Tcf7l1')
+selected_TFs[['Immune']] <- c('Irf1', 'Spi1', 'Fli1', 'Ikzf1', 'Runx1', 'Runx2', 'Runx3', 'Pax5', 'Ebf1', 'Blc11a', 'Tbx21')
+selected_TFs[['LSEC']] <- c('Erg', 'Elk4', 'Meis1', 'Maf', 'Gata4')
+selected_TFs[['HSC']] <- c('Foxf1', 'Mef2a', 'Mef2c', 'Lhx2', 'Tead1')
+selected_TFs[['Fibroblast']] <- c('Jun')
+selected_TFs[['BEC']] <- c('Tead4', 'Sox9', 'Hnf1b')
+
+sel_TFs <- unlist(as.vector(selected_TFs))
+sel_TF_data <- TF_data[which(TF_data$TF %in% sel_TFs),]
+sel_TF_data$Motif <- as.numeric(sel_TF_data$Motif)
+sel_TF_data$Expression <- as.numeric(sel_TF_data$Expression)
+sel_TF_data$TF <- factor(sel_TF_data$TF, levels = rev(sel_TFs))
+sel_TF_data$Cell_type <- factor(sel_TF_data$Cell_type, levels=names(motif_enrichment_table_list))
+sel_TF_data <- sel_TF_data[-which(sel_TF_data$Cell_type == 'VEC'),]
+sel_TF_data$Cell_type <- factor(sel_TF_data$Cell_type, levels=names(motif_enrichment_table_list)[-which(names(motif_enrichment_table_list) == 'VEC')])
+sel_TF_data$Motif[which(sel_TF_data$Motif>7)] <- 7
+sel_TF_data$Expression[which(sel_TF_data$Expression < -2.5)] <- -2.5
+sel_TF_data$Expression[which(sel_TF_data$Expression > 2.5)] <- 2.5
+```
+
+```{r}
+sel_TF_data$TF <- factor(sel_TF_data$TF, levels=sel_TFs)
+sel_TF_data$Cell_type <- factor(sel_TF_data$Cell_type, levels=rev(levels(sel_TF_data$Cell_type)))
+g <- ggplot(data = sel_TF_data, mapping = aes_string(x = 'Cell_type', y = 'TF')) +
+    geom_tile(mapping = aes_string(fill = 'Expression')) +
+    geom_point(mapping = aes_string(size = 'Motif'), colour="black",pch=21, fill = 'black') +
+    scale_radius(range = c(2,  10)) +
+    scale_fill_distiller(palette = "RdYlBu", limits=c(-2.5,2.5)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()
+print(g)
+ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/TF_VS_Motif_all_normal_color.pdf', g, width=13, height=8)
+```
+
+# Panel B
+
+## Calculate RSS
+
+```{r}
+library(SCopeLoomR)
+library(AUCell)
+library(SCENIC)
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_simplified/rna_curated/SCENIC+_curated_gene_based.loom'
+loom <- open_loom(loom_path)
+cells_AUC <- getAUC(get_regulons_AUC(loom, column.attr.name='RegulonsAUC'))
+cell_data <- get_cell_annotation(loom)
+cell_data$Pseudobulk <- cell_data$Refined_cell_type
+cell_data$Pseudobulk[grep('VEC', cell_data$Pseudobulk)] <- 'VEC'
+cell_data$Pseudobulk[grep('Kupffer', cell_data$Pseudobulk)] <- 'Kupffer'
+cell_data$Pseudobulk[grep('DC', cell_data$Pseudobulk)] <- 'DC'
+#cell_data$Pseudobulk[grep('Hep', cell_data$Pseudobulk)] <- 'Hepatocyte'
+```
+
+```{r}
+rss_values <- calcRSS(cells_AUC, cell_data$Pseudobulk)
+rss_values <- sweep(rss_values,2,colSums(rss_values),`/`)*100
+rownames(rss_values) <- gsub('_extended', '', rownames(rss_values))
+rss_values <- rss_values[,sort(colnames(rss_values))]
+rss_values <- rss_values[,c('Hep_PP_PC_1', 'Hep_PP_PC_2', 'Hep_PP_PC_3', 'Hep_PP_PC_4',  'Hep_PP_PC_5', 'Kupffer', 'DC', 'B_cell', 'T_cell', 'LSEC', 'VEC','HSC', 'Fibroblast', 'MSC', 'BEC')]
+rssPlot <- plotRSS(rss_values)
+plotly::ggplotly(rssPlot$plot)
+```
+
+```{r}
+for (name in colnames(rss_values)){
+  print(plotRSS_oneSet(rss_values, setName = name, n=30))
+}
+```
+
+```{r}
+dgem <- get_dgem(loom)
+expression_list <- list()
+for (x in unique(cell_data$Pseudobulk)){
+  expression_list[[x]] <- as.data.frame(t(log(rowSums(dgem[,grep(x, cell_data$Pseudobulk)])/sum(rowSums(dgem[,grep(x, cell_data$Pseudobulk)]))*10^6+1)))
+}
+exp_mat <- t(rbindlist(expression_list))
+colnames(exp_mat) <- names(expression_list)
+exp_mat <- exp_mat[,c('Hep_PP_PC_1', 'Hep_PP_PC_2', 'Hep_PP_PC_3', 'Hep_PP_PC_4',  'Hep_PP_PC_5', 'Kupffer', 'DC', 'B_cell', 'T_cell', 'LSEC', 'VEC','HSC', 'Fibroblast', 'MSC', 'BEC')]
+exp_mat <- t(scale(t(exp_mat)))
+```
+
+```{r}
+selected_regulons <- list()
+selected_regulons[['General']] <- c('Cebpa_+', 'Hnf1a_+', 'Foxa1_+', 'Hnf4a_+', 'Onecut1_+', 'Onecut2_+', 'Ppara_+', 'Clock_+', 'Mlxipl_+', 'Rfx3_+', 'Agmat_+', 'Hhex_+', 'Nr1i2_+', 'Rxra_+', 'Nfia_+', 'Nfib_+')
+selected_regulons[['PP']] <- c('Egr1_+', 'Esr1_+', 'Id2_+', 'Foxq1_+', 'Sox9_+', 'Ppargc1a_+', 'Tbx3_-', 'Esrra_+')
+selected_regulons[['PC']] <- c('Ahr_+', 'Nr1i3_+', 'Pparg_+', 'Esrrg_+', 'Ar_+', 'Acaa1a_+', 'Tcf7l1_-', 'Sp5_+', 'Pknox2_+')
+selected_regulons[['Kupffer']] <- c('Spi1_+', 'Batf3_+', 'Irf1_+', 'Jdp2_+', 'Irf7_+', 'Nr4a1_+', 'Fli1_+', 'Zeb2_+', 'Rel_+', 'Runx1_+')
+selected_regulons[['Immune']] <- c('Runx2_+', 'Runx3_+', 'Satb1_+')
+selected_regulons[['B_cell']] <- c('Pax5_+', 'Ebf1_+')
+selected_regulons[['T_cell']] <- c('Gata3_+', 'Lef1_+')
+selected_regulons[['LSEC']] <- c('Meis1_+', 'Maf_+', 'Gata4_+', 'Sox17_+', 'Mef2c_+', 'Erg_+', 'Elk3_+', 'Luzp1_+', 'Hoxb4_+', 'Hoxb3_+')
+selected_regulons[['HSC']] <- c('Ets1_+', 'Gli3_+', 'Tcf21_+', 'Tbx20_+', 'Prdm5_+', 'Hey2_+', 'Heyl_+', 'Hand2_+', 'Lhx2_+', 'Glis3_+', 'Nr1h5_+', 'Tead1_+')
+# Heys zonation?
+selected_regulons[['Fibroblast']] <- c('Wt1_+', 'Glis1_+', 'Plagl1_+', 'Prdm6_+')
+selected_regulons[['MSC']] <- c('Tbx15_+', 'Klf4_+')
+selected_regulons[['BEC']] <- c('Tead4_+', 'Sox4_+', 'Prdm16_+','Ehf_+', 'Hnf1b_+', 'Hnf4g_+')
+sel_rel <- unlist(as.vector(selected_regulons))
+```
+
+```{r}
+rss_values <- t(apply(rss_values, 1, function(x)(x-min(x))/(max(x)-min(x))))
+rel_list <- sel_rel
+rel_data <- data.frame()
+for (rel in rel_list){
+  for (name in colnames(rss_values)){
+      tf <- strsplit(rel, split = "_")[[1]][1]
+      row_to_add <- t(c(rel, name, exp_mat[tf, name], rss_values[rel,name]))
+      rel_data <- rbind(rel_data, row_to_add)
+   }
+}
+colnames(rel_data) <- c('Regulon', 'Cell_type', 'Expression', 'RSS')
+```
+
+```{r}
+rel_data$Regulon <- factor(rel_data$Regulon, levels=rev(sel_rel))
+rel_data$Cell_type <- factor(rel_data$Cell_type, levels=colnames(rss_values))
+rel_data$RSS <- as.numeric(rel_data$RSS)
+rel_data$Expression <- as.numeric(rel_data$Expression)
+rel_data$Expression[which(rel_data$Expression < -2.5)] <- -2.5
+rel_data$Expression[which(rel_data$Expression > 2.5)] <- 2.5
+g <- ggplot(data = rel_data, mapping = aes_string(x = 'Cell_type', y = 'Regulon')) +
+    geom_tile(mapping = aes_string(fill = 'Expression')) +
+    geom_point(mapping = aes_string(size = 'RSS'), colour="black",pch=21, fill = 'black') +
+    scale_radius(range = c(0.3,  5)) +
+    scale_fill_distiller(palette = "RdYlBu", limits=c(-2.5,2.5)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) 
+print(g)
+ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/Regulon_dotplot_all_RSS.pdf', g, width=8, height=13)
+```
+
+# Panel C
+
+```{r}
+library(SCopeLoomR)
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_curated_only_positive/rna/SCENIC+_gene_based_gene_based.loom'
+loom <- open_loom(loom_path)
+cells_AUC <- AUCell::getAUC(get_regulons_AUC(loom, column.attr.name='RegulonsAUC'))
+cells_AUC_ne <- cells_AUC[-grep('extended', rownames(cells_AUC)),]
+cells_AUC_e <- cells_AUC[grep('extended', rownames(cells_AUC)),]
+rownames(cells_AUC_e) <- gsub('_extended', '', rownames(cells_AUC_e) )
+cells_AUC_e <- cells_AUC_e[-which(rownames(cells_AUC_e) %in% rownames(cells_AUC_ne)),]
+cells_AUC <- rbind(cells_AUC_ne, cells_AUC_e)
+```
+
+```{r}
+aggregateReads_n <- function(matrix, vector, n=1000, s=1){
+  mean_list <- list()
+  for (i in 1:n){
+    mean_list[[i]] <- as.data.frame(t(rowMeans(matrix[,sample(vector, s),drop=FALSE])))
+  }
+  df <- rbindlist(mean_list)
+  colnames(df) <- rownames(matrix)
+  return(df)
+}
+```
+
+```{r}
+aggregateReads <- function(matrix, vector){
+  return(rowMeans(matrix[,vector]))
+}
+```
+
+```{r}
+cell_data <- get_cell_annotation(loom)
+cell_data$sample_id <- as.vector(cell_data$sample_id)
+cell_data$sample_id[grep('fresh_mouse1', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-1'
+cell_data$sample_id[grep('fresh_mouse2', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-2'
+cell_data$sample_id[grep('frozen_mouse2', cell_data$sample_id)] <- 'snRNA_Frozen_Mouse-2'
+cell_data$sample_id[grep('fresh_mouse3', cell_data$sample_id)] <- 'snRNA_Fresh_Mouse-3'
+cell_data$sample_id[grep('Multiome_10x', cell_data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+cell_data$sample_id[grep('Multiome_NST', cell_data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+```
+
+```{r}
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+count.matrix <- cells_AUC
+#count.matrix  <- sweep(count.matrix ,2,colSums(count.matrix),`/`)
+matrix <- t(scale(t(count.matrix)))
+matrix <- matrix[,Hep_cells]
+markers <- rownames(matrix)
+count.matrix2 <- matrix
+aggregate_df <- data.frame()
+stats_df <- data.frame()
+n <- 50
+cell_data <- cell_data[which(rownames(cell_data) %in% colnames(count.matrix2)),]
+for (sample in unique(cell_data$sample_id)){
+  #print(sample)
+  sub_cell_data <- cell_data[which(cell_data$sample_id == sample),]
+  celltypes <- split(rownames(sub_cell_data), sub_cell_data$Refined_cell_type)
+  celltypes <- celltypes[which(lengths(celltypes) > 1)]
+  library(plyr)
+  #aggregate.mat <- llply(celltypes, function(x) as.data.frame(aggregateReads(count.matrix2, x, n=n)))
+  aggregate.mat <- llply(celltypes, function(x) as.data.frame(t(aggregateReads(count.matrix2, x))))
+  aggregate.mat <- data.table::rbindlist(aggregate.mat)
+  aggregate.mat <- as.matrix(aggregate.mat)
+  rownames(aggregate.mat) <- names(celltypes)
+  #rownames(aggregate.mat) <- paste0(rep(names(celltypes), each=n),'_', rep(1:n))
+  library(rlist)
+  new_df <- reshape::melt(aggregate.mat)
+  new_df$sample <- rep(sample, nrow(new_df))
+  #new_df[,1] <- gsub('.{2}$', '', new_df[,1])
+  aggregate_df <- rbind(aggregate_df, new_df)
+}
+for (signature in unique(aggregate_df$X2)){
+  #print(signature)
+  sub_data <- aggregate_df[which(aggregate_df$X2 == signature),]
+  sub_data <- sub_data[grep('Hep', sub_data$X1),]
+  # Compute the analysis of variance
+  res.aov <- aov(value ~ X1 + factor(sample), data = sub_data)
+  # Summary of the analysis
+  #data <- cbind(summary(res.aov)[[1]][[1]], summary(res.aov)[[1]][[2]], summary(res.aov)[[1]][[3]], summary(res.aov)[[1]][[4]], summary(res.aov)[[1]][[5]])[1:2,]
+  data <- summary(res.aov)[[1]][1:2,]
+  zon <- data[1,]
+  colnames(zon) <- paste0('Zonation_', colnames(zon))
+  sample <- data[2,]
+  colnames(sample) <- paste0('Sample_', colnames(sample))
+  #colnames(data) <- colnames(summary(res.aov)[[1]])
+  data <- cbind(zon, sample)
+  rownames(data) <- signature
+  data <- as.data.frame(data)
+  stats_df <- rbind(stats_df, data) 
+}
+
+#adjusted_pvals <- p.adjust(c(stats_df$`Zonation_Pr(>F)`, stats_df$`Sample_Pr(>F)`), method='BH')
+stats_df$Zonation_padjust <- p.adjust(stats_df$`Zonation_Pr(>F)`, method='bonferroni')
+stats_df$Zonated <- 'Not Zonated'
+stats_df$Zonated[which(stats_df$Zonation_padjust < 10^-10)] <- 'Zonated'
+stats_df$Sample_padjust <- p.adjust(stats_df$`Sample_Pr(>F)`, method='bonferroni')
+stats_df$Mice_dependant <- 'Not mouse dependant'
+stats_df$Mice_dependant[which(stats_df$Sample_padjust < 10^-10)] <- 'Mouse dependant'
+#stats_df <- stats_df[complete.cases(stats_df),]
+table(stats_df$Zonated, stats_df$Mice_dependant)
+```
+
+```{r}
+# Extract the residuals
+aov_residuals <- residuals(object = res.aov )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals )
+library(car)
+leveneTest(value ~ sample, data = sub_data, center = mean)
+leveneTest(value ~ X1, data = sub_data, center = mean)
+```
+
+```{r}
+signature <- 'Tcf7l1_-'
+sub_data <- aggregate_df[which(aggregate_df$X2 == signature),]
+sub_data <- sub_data[grep('Hep', sub_data$X1),]
+kruskal.test(value ~ X1, data = sub_data)
+kruskal.test(value ~ sample, data = sub_data)
+```
+
+```{r}
+rownames(stats_df[which((stats_df$Mice_dependant == 'Not mouse dependant') & (stats_df$Zonated == 'Zonated')),])
+```
+
+```{r}
+rownames(stats_df[which((stats_df$Mice_dependant == 'Mouse dependant') & (stats_df$Zonated == 'Zonated')),])
+```
+
+```{r}
+rownames(stats_df[which((stats_df$Mice_dependant == 'Not mouse dependant') & (stats_df$Zonated == 'Not Zonated')),])
+```
+
+
+```{r}
+plot(-log10(stats_df$Sample_padjust), -log10(stats_df$Zonation_padjust), pch=16)
+stats_df$Name <- gsub('_extended', '', rownames(stats_df))
+stats_df$Name <- gsub('_', '', stats_df$Name )
+stats_df$X <- -log10(stats_df$Sample_padjust)
+stats_df$Y <- -log10(stats_df$Zonation_padjust)
+```
+
+```{r}
+library(ggplot2)
+ggplot() +
+  geom_text(
+    data = stats_df,
+    mapping = aes(
+      x = X,
+      y = Y,
+      label = Name
+    ),
+    size = 2
+  ) +
+  coord_flip() +
+  theme_bw(base_size = 20) +
+  theme(panel.grid = element_blank()) +
+  labs(x = "Mouse specificity", y = "Zone specificity")
+```
+
+```{r}
+stats_df$size <- 3
+stats_df$color <- 'grey'
+for (TF in c('Cebpa_+', 'Foxa1_+', 'Onecut1_+', 'Hnf4a_+', 'Tcf7l1_-', 'Tbx3_-', 'Clock_+', 'Hnf1a_+')){
+  stats_df[TF,'size'] <- 5
+}
+stats_df['Cebpa_+','color'] <- 'dodgerblue'
+stats_df['Foxa1_+','color'] <- 'brown1'
+stats_df['Onecut1_+','color'] <- 'purple'
+stats_df['Hnf4a_+','color'] <- 'forestgreen'
+stats_df['Tcf7l1_-','color'] <- 'orange'
+stats_df['Tbx3_-','color'] <- 'pink'
+stats_df['Hnf1a_+','color'] <- 'darkgoldenrod1'
+stats_df['Clock_+','color'] <- 'brown'
+
+
+library(ggplot2)
+ggplot() +
+  geom_text(
+    data = stats_df,
+    mapping = aes(
+      x = X,
+      y = Y,
+      label = Name
+    ),
+    size = stats_df$size,
+    color = stats_df$color,
+    vjust="inward",hjust="inward"
+  ) +
+  coord_flip() +
+  theme_bw(base_size = 20) +
+  theme(panel.grid = element_blank()) +
+  labs(x = "Mouse specificity", y = "Zone specificity")
+```
+
+```{r}
+selected_regulons <- list()
+selected_regulons[['General']] <- c('Cebpa_+', 'Hnf1a_+', 'Foxa1_+', 'Hnf4a_+', 'Onecut1_+', 'Onecut2_+', 'Ppara_+', 'Clock_+', 'Mlxipl_+', 'Rfx3_+', 'Agmat_+', 'Hhex_+', 'Nr1i2_+', 'Rxra_+', 'Nfia_+', 'Nfib_+')
+selected_regulons[['PP']] <- c('Egr1_+', 'Esr1_+', 'Id2_+', 'Foxq1_+', 'Sox9_+', 'Ppargc1a_+', 'Tbx3_-', 'Esrra_+')
+selected_regulons[['PC']] <- c('Ahr_+', 'Nr1i3_+', 'Pparg_+', 'Esrrg_+', 'Ar_+', 'Acaa1a_+', 'Tcf7l1_-', 'Sp5_+', 'Pknox2_+')
+selected_regulons <- unlist(as.vector(selected_regulons))
+```
+
+```{r}
+df <- stats_df[selected_regulons,]
+table(df$Zonated, df$Mice_dependant)
+```
+
+```{r}
+cells_AUC_sub <- t(cells_AUC[selected_regulons,Hep_cells])
+pca <- prcomp(cells_AUC_sub, center = TRUE,scale. = TRUE)
+```
+
+```{r}
+stats_df_sub <- stats_df[selected_regulons,]
+stats_df_sub$X <- abs(pca$rotation[,3])
+stats_df_sub$Y <- pca$rotation[,1]
+stats_df_sub$Name <- gsub('+', '(+)', stats_df_sub$Name, fixed=TRUE)
+stats_df_sub$Name <- gsub('-', '(-)', stats_df_sub$Name, fixed=TRUE)
+library(ggplot2)
+g <- ggplot() +
+  geom_text(
+    data = stats_df_sub,
+    mapping = aes(
+      x = X,
+      y = Y,
+      label = Name
+    ),
+    size = stats_df_sub$size,
+    color = stats_df_sub$color,
+    vjust="inward",hjust="inward"
+  ) +
+  coord_flip() +
+  theme_bw(base_size = 20) +
+  theme(panel.grid = element_blank()) +
+  labs(x = "Mouse specificity", y = "Zonation specificity")
+print(g)
+#ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/MouseVSZonation_v2.pdf', g, width=4, height=4)
+```
+
+# Panel D
+
+```{r}
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+selected_rows <- c('Tcf7l1_-', "Hnf1a_+",  'Tbx3_-', "Nr1i3_+", 'Agmat_+', 'Foxq1_+')
+count.matrix <- cells_AUC
+matrix <- t(scale(t(count.matrix)))
+matrix <- matrix[selected_rows,Hep_cells]
+rownames(matrix) <-  c('4_Tcf7l1_-', "5_Hnf1a_+",  '6_Tbx3_-', "1_Nr1i3_+", '2_Agmat_+', '3_Foxq1_+')
+
+markers <- rownames(matrix)
+matrix <- matrix[,complete.cases(matrix)]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt = Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime'], sample_id =  cell_data[Hep_cells, 'sample_id']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+
+# Gene expression
+gene_expression <- as.matrix(Seurat_RNA@assays$RNA@data[c('Tcf7l1', 'Hnf1a', 'Tbx3', 'Nr1i3', 'Agmat', 'Foxq1'), ])
+rownames(gene_expression) <- c('4_Tcf7l1_-', '5_Hnf1a_+', '6_Tbx3_-', '1_Nr1i3_+', '2_Agmat_+', '3_Foxq1_+')
+matrix <- t(scale(t(gene_expression)))
+matrix <- matrix[,Hep_cells]
+markers <- rownames(matrix)
+matrix <- matrix[,complete.cases(matrix)]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt = Seurat_RNA@meta.data[colnames(matrix), 'Hep_pseudotime']))))
+expr_matrix$sample_id <- rep('Expression', nrow(expr_matrix))
+library(tidyr)
+library(ggplot2)
+df_2 <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df_2$expr <- as.numeric(as.character(df_2$expr)) 
+df_2$dpt <- as.numeric(as.character(df_2$dpt))
+df <- rbind(df, df_2)
+
+my_levels <- c('snRNA_Fresh_Mouse-1', 'snRNA_Fresh_Mouse-2', 'snRNA_Frozen_Mouse-2', 'snRNA_Fresh_Mouse-3',
+                      'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5', 'Expression')
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2, 'grey')
+names(color) <- my_levels
+df$sample_id <- factor(x = as.vector(df$sample_id) , levels = my_levels)
+
+p <- ggplot(df, mapping = aes(x=dpt, y=expr, group=sample_id)) + theme_classic() + xlab('Pseudotime') + ylab('AUC enrichment') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y", ncol=3) + scale_color_manual(values=color) +ylim(-1,3)
+library(Seurat)
+g <- p + geom_smooth(aes(color = sample_id), method = 'gam', se=F) + scale_color_manual(values=color) + NoLegend()
+g
+ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/MouseVSZonation_sampleplot_withTFexpression.pdf', g, width=12, height=4)
+```
+
+```{r}
+# Add TF expression as well
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+selected_rows <- c('Tcf7l1_-', "Hnf1a_+",  'Tbx3_-', "Nr1i3_+", 'Agmat_+', 'Foxq1_+')
+count.matrix <- cells_AUC
+matrix <- t(scale(t(count.matrix)))
+matrix <- matrix[selected_rows,Hep_cells]
+rownames(matrix) <-  c('4_Tcf7l1_-', "5_Hnf1a_+",  '6_Tbx3_-', "1_Nr1i3_+", '2_Agmat_+', '3_Foxq1_+')
+
+markers <- rownames(matrix)
+matrix <- matrix[,complete.cases(matrix)]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt = Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime'], sample_id =  cell_data[Hep_cells, 'sample_id']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+my_levels <- c('snRNA_Fresh_Mouse-1', 'snRNA_Fresh_Mouse-2', 'snRNA_Frozen_Mouse-2', 'snRNA_Fresh_Mouse-3',
+                      'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2)
+names(color) <- my_levels
+df$sample_id <- factor(x = as.vector(df$sample_id) , levels = my_levels)
+
+p <- ggplot(df, mapping = aes(x=dpt, y=expr, group=sample_id)) + theme_classic() + xlab('Pseudotime') + ylab('AUC enrichment') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y", ncol=3) + scale_color_manual(values=color) +ylim(-1,3)
+library(Seurat)
+g <- p + geom_smooth(aes(color = sample_id), method = 'gam', se=F) + scale_color_manual(values=color) + NoLegend()
+g
+#ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/MouseVSZonation_sampleplot.pdf', g, width=12, height=4)
+```
+
+```{r}
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+selected_rows <- c('Tcf7l1_-', "Hnf4a_+",  'Tbx3_-', "Nr1i3_+", 'Agmat_+', 'Foxq1_+')
+count.matrix <- cells_AUC
+matrix <- t(scale(t(count.matrix)))
+matrix <- matrix[selected_rows,Hep_cells]
+rownames(matrix) <-  c('4_Tcf7l1_-', "5_Hnf4a_+",  '6_Tbx3_-', "1_Nr1i3_+", '2_Agmat_+', '3_Foxq1_+')
+
+markers <- rownames(matrix)
+matrix <- matrix[,complete.cases(matrix)]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt = Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime'], sample_id =  cell_data[Hep_cells, 'sample_id']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+my_levels <- c('snRNA_Fresh_Mouse-1', 'snRNA_Fresh_Mouse-2', 'snRNA_Frozen_Mouse-2', 'snRNA_Fresh_Mouse-3',
+                      'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')
+c2 <- brewer.pal(3, 'Blues')[2:3]
+color <- c(c1, c2)
+names(color) <- my_levels
+df$sample_id <- factor(x = as.vector(df$sample_id) , levels = my_levels)
+
+p <- ggplot(df, mapping = aes(x=dpt, y=expr, group=sample_id)) + theme_classic() + xlab('Pseudotime') + ylab('AUC enrichment') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y", ncol=3) + scale_color_manual(values=color) +ylim(-1,3)
+library(Seurat)
+g <- p + geom_smooth(aes(color = sample_id), method = 'gam', se=F) + scale_color_manual(values=color) + NoLegend()
+g
+#ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots_v2/MouseVSZonation_sampleplot.pdf', g, width=12, height=4)
+```
+
+# Region-gene link plots
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA_1 <- Seurat_RNA
+Seurat_RNA_1 <- Seurat_RNA_1[,which(Seurat_RNA_1$sample_id == 'TEW__043783__Mouse_4_Multiome_10x')]
+Seurat_RNA_1 <- Seurat_RNA_1[,grep('Hep', Seurat_RNA_1$Refined_cell_type)]
+Seurat_RNA_1 <- RenameCells(Seurat_RNA_1 , new.names = gsub('-TEW__043783__523d9c__Multiome_Liver_10xprotocol', '-1', colnames(Seurat_RNA_1)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/mouse_liver/cellranger_arc/Protocols_evaluation/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/mouse_liver/cellranger_arc/Protocols_evaluation/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_1)]
+Seurat_RNA_1[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_1[["ATAC"]]) <- annotation
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA_2 <- Seurat_RNA
+Seurat_RNA_2 <- Seurat_RNA_2[,which(Seurat_RNA_2$sample_id == 'TEW__ebb273__Mouse_5_Multiome_NST')]
+Seurat_RNA_2 <- Seurat_RNA_2[,grep('Hep', Seurat_RNA_2$Refined_cell_type)]
+Seurat_RNA_2 <- RenameCells(Seurat_RNA_2 , new.names = gsub('-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol', '-1', colnames(Seurat_RNA_2)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/mouse_liver/cellranger_arc/Protocols_evaluation/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/mouse_liver/cellranger_arc/Protocols_evaluation/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_2)]
+Seurat_RNA_2[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_2[["ATAC"]]) <- annotation
+```
+
+```{r}
+combined <- merge(
+  x = Seurat_RNA_1,
+  y = Seurat_RNA_2
+)
+```
+
+```{r}
+saveRDS(combined, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes_v2.RDS')
+```
+
+```{r}
+combined <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes_v2.RDS')
+```
+
+```{r}
+regionNamesToDF <- function(region_names){
+  seqnames <- sapply(strsplit(region_names, split = ":"), "[", 1)
+  coords <- sapply(strsplit(region_names, split = ":"), "[", 2)
+  start <- sapply(strsplit(coords, split = "-"), "[", 1)
+  end <- sapply(strsplit(coords, split = "-"), "[", 2)
+  dataframe <- as.data.frame(cbind(seqnames, start, end))
+  colnames(dataframe) <- c('seqnames', 'start', 'end')
+  return(dataframe)
+}
+```
+
+```{r}
+# In general to show links
+r2g <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/r2g_links/all_eGRN_links.Rds')
+r2g_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/r2g_links/region_to_gene.tsv', sep='\t', header=TRUE)
+r2g$ID <- paste0(r2g$sourceName, '_', r2g$name)
+r2g_data$ID <- paste0(r2g_data$region, '_', r2g_data$target)
+r2g_links <- merge(r2g, r2g_data, by='ID')
+r2g_links <- r2g_links[complete.cases(r2g_links),]
+rang <- r2g_links[,c(2,3,4)]
+colnames(rang) <- c('seqnames', 'start', 'end')
+library(GenomicRanges)
+r2g_links_gr <- makeGRangesFromDataFrame(rang)
+r2g_links_gr$gene <- r2g_links$name
+r2g_links_gr$score <- r2g_links$rho
+```
+
+```{r}
+library(GenomicRanges)
+#path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/curated_eregulons_bed/'
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/curated_eregulons_bed_all_positive/'
+files <- list.files(path)[grep('bed', list.files(path))]
+files <- files[-which(files == 'Tcf7l2_+.bed')]
+peaks <- list()
+peaks_df <- list()
+for (file in files){
+  name <- gsub('_+.bed', '', file, fixed=TRUE)
+  name <- gsub('_-.bed', '', name, fixed=TRUE)
+  df <- read.table(paste0(path, file))
+  colnames(df) <- c('seqnames', 'start', 'end')
+  df$consensus_region <- paste0(df[,1], ':', df[,2], '-', df[,3])
+  peaks[[name]] <- paste0(df[,1], ':', df[,2], '-', df[,3])
+  peaks_df[[name]] <- as.data.frame(df)
+}
+```
+
+```{r}
+x <- r2g[which(r2g[,12] %in% peaks_df[['Tcf7l1']][,4]),]
+x <- x[which(x[,4] == 'Tbx3'),]
+unique(x[,12])
+```
+
+```{r}
+gene <- 'Tbx3'
+region <- 'chr5-119542274-119687084'
+#combined <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes_v2.RDS')
+combined_r2g <- combined
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+#library(BSgenome.Mmusculus.UCSC.mm10)
+DefaultAssay(combined_r2g) <- "ATAC"
+r2g_links_gr <- r2g_links_gr[which(r2g_links_gr$gene == gene),]
+r2g_links_gr$score[which(r2g_links_gr$score < 0)] <- 0
+Links(combined_r2g) <- r2g_links_gr
+```
+
+```{r}
+for (n in names(peaks_df)){
+  peaks_df[[n]] <- makeGRangesFromDataFrame(peaks_df[[n]])
+}
+# Bigwig
+colvar <- c("#268c37", "#4783c4", "#e94547",  "#6c4696", "#f7a418")
+names(colvar) <- c('Hnf4a', 'Cebpa', 'Foxa1', 'Onecut1', 'Tcf7l1')
+signac_obj <- combined_r2g
+m_peak_plot_1 <- PeakPlot(signac_obj, region, peaks=peaks_df[['Hnf4a']], col=colvar[['Hnf4a']]) + theme_void() + theme(legend.position="none")
+m_peak_plot_2 <- PeakPlot(signac_obj, region, peaks=peaks_df[['Cebpa']], col=colvar[['Cebpa']]) + theme_void() + theme(legend.position="none")
+m_peak_plot_3 <- PeakPlot(signac_obj, region, peaks=peaks_df[['Foxa1']], col=colvar[['Foxa1']]) + theme_void() + theme(legend.position="none")
+m_peak_plot_4 <- PeakPlot(signac_obj, region, peaks=peaks_df[['Onecut1']], col=colvar[['Onecut1']]) + theme_void() + theme(legend.position="none")
+m_peak_plot_5 <- PeakPlot(signac_obj, region, peaks=peaks_df[['Tcf7l1']], col=colvar[['Tcf7l1']]) + theme_void() + theme(legend.position="none")
+```
+
+```{r}
+# Coverage
+cov_plot <- CoveragePlot(
+  object = combined_r2g,
+  region = region,
+  features = gene, 
+  group.by = 'Refined_cell_type',
+  annotation = FALSE,
+  peaks = FALSE,
+  links = FALSE,
+)  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a")) 
+# Annotation
+gene_plot <- AnnotationPlot(
+  object = combined_r2g,
+  region = region
+)
+# Links
+library(RColorBrewer)
+link_plot_1 <- LinkPlot(
+  object = combined_r2g,
+  region = region,
+  min.cutoff = -1
+)  + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+ scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+# Expression
+expr.plot <- ExpressionPlot(combined, features = c('Tcf7l1', 'Tbx3'), assay = "RNA", group.by = 'Refined_cell_type')  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a"))
+library(patchwork)
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_2/plots/Tbx3_locus_w_regulons.pdf')
+p <- CombineTracks(
+  plotlist = list( cov_plot, m_peak_plot_1, m_peak_plot_2, m_peak_plot_3, m_peak_plot_4, m_peak_plot_5, link_plot_1, gene_plot),
+  expression.plot = expr.plot,
+  heights = c(5, rep(0.25,5), 2, 2),
+  widths = c(10,1)
+)
+p
+dev.off()
+```

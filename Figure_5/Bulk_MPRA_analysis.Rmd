@@ -1,0 +1,725 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# 1. Make correlation plot
+
+```{r}
+save_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/Zonation_library/BAD_library/analysis/V7/'
+```
+
+```{r}
+raw_counts <- readRDS(paste0(save_path, 'raw_counts.RDS'))
+raw_counts <- raw_counts[,c(grep('Mouse', colnames(raw_counts)), grep('HepG2', colnames(raw_counts)), grep('Nanopore', colnames(raw_counts)))]
+raw_counts <- raw_counts[,-grep('5prime', colnames(raw_counts))]
+out <- c('3prime_HepG2_S4_cDNA', '3prime_Mouse48hr_M1S1_cDNA', '3prime_Mouse48hr_M2S1_cDNA', '3prime_Mouse48hr_M3S1_cDNA')
+raw_counts <- raw_counts[,-which(colnames(raw_counts) %in% out)]
+colnames(raw_counts) <- gsub('plasmid', 'Plasmid', colnames(raw_counts))
+colnames(raw_counts) <- gsub('Mouse_', 'Mouse24hr_', colnames(raw_counts))
+colnames(raw_counts) <- gsub('3prime_', '', colnames(raw_counts))
+colnames(raw_counts) <- gsub('Mouse48hr_S', 'Mouse48hr_rep1S', colnames(raw_counts))
+colnames(raw_counts) <- gsub('Mouse48hr_M', 'Mouse48hr_rep2S', colnames(raw_counts))
+colnames(raw_counts) <- gsub('Mouse48hr_rep2S4', 'Mouse48hr_rep2S3', colnames(raw_counts))
+colnames(raw_counts)
+```
+```{r}
+raw_counts <- raw_counts[,-which(colnames(raw_counts) %in% c("Mouse24hr_S1_cDNA", "Mouse24hr_S2_cDNA", "Mouse24hr_S2_cDNA"))]
+colnames(raw_counts) <- gsub('Mouse24hr', 'Mouse', colnames(raw_counts))
+colnames(raw_counts) <- gsub('Mouse48hr', 'Mouse', colnames(raw_counts))
+colnames(raw_counts) <- gsub('_S', '_rep3S', colnames(raw_counts))
+colnames(raw_counts)
+```
+```{r}
+write.table(raw_counts, file='/staging/leuven/stg_00002/lcb/cbravo/GEO_Bravo_etal_2022/geo_submission/FACS-MPRA/processed/Bulk_455_MPRA_counts.tsv', quote=FALSE, sep='\t', row.names = TRUE, col.names = TRUE)
+```
+
+Get correlation between samples and cluster.
+
+```{r, message = FALSE, warnings = FALSE}
+cormat <- round(cor(raw_counts),2)
+dist.mat <- dist(cormat)
+clust <- hclust(dist.mat)
+cormat <- cormat[clust$order,rev(clust$order)]
+colnames(cormat) <- gsub('_', ' ', colnames(cormat))
+rownames(cormat) <- gsub('_', ' ', rownames(cormat))
+cormat <- cormat[,-grep('24', colnames(cormat))]
+cormat <- cormat[-grep('24', rownames(cormat)),]
+```
+
+Make correlation heatmap.
+
+```{r, fig.height = 8, fig.width = 8, fig.align = "center", message = FALSE, warnings = FALSE}
+library(reshape2)
+library(ggplot2)
+# Format matrix
+melted_cormat <- melt(cormat)
+# Create heatmap
+ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "floralwhite", high = "red", 
+   midpoint = 0, limit = c(-0.05,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed()
+# Add correlation values
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk_cheqseq_correlation_samples_no24.pdf', width=8, height=8)
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 2) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+dev.off()
+```
+
+# 2. DESeq
+
+```{r}
+library(DESeq2)
+timepoints <- c('HepG2', 'Mouse24hr', 'Mouse48hr')
+timepoints_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+plasmid_sample <- sapply(strsplit(colnames(raw_counts), split = "_"), "[", 1)
+res_list <- list()
+res_list_filt <- list()
+for (time in timepoints){
+      print(time)
+      sub_raw_counts <- raw_counts[,which(timepoints_sample == time), drop=FALSE]
+      cdna <- sub_raw_counts[,grep('cDNA', colnames(sub_raw_counts))]
+      plas <- sub_raw_counts[,grep('Plasmid', colnames(sub_raw_counts))]
+      if (time == 'HepG2'){
+        plas <- plas[,grep('HepG2', colnames(plas))]
+      } else {
+        plas <- plas[,grep('Mouse', colnames(plas))]
+      }
+      plas2 <- raw_counts[,grep('Nanopore', colnames(raw_counts)), drop=FALSE]
+      colnames(plas2) <- "Nanopore_Assignments_Plasmid"
+      sub_raw_counts <- cbind(cdna, plas, plas2)
+      samples <- sort(colnames(sub_raw_counts))
+      coldata <- sapply(strsplit(samples, split = "_"), "[", 3)
+      names(coldata) <- samples
+      coldata <- as.data.frame(coldata)
+      colnames(coldata) <- 'condition'
+      print(coldata)
+      if (length(samples) == 2){
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ 1)
+      } else{
+        dds <- DESeqDataSetFromMatrix(countData = sub_raw_counts,
+                                    colData = coldata[colnames(sub_raw_counts),,drop=FALSE],
+                                    design = ~ condition)
+        dds$condition <- relevel(dds$condition, ref = "Plasmid")
+      }
+
+      dds <- DESeq(dds)
+      res <- results(dds)
+      cc_res <- res[complete.cases(res),]
+      res_list[[paste0(time)]] <- cc_res
+      print(dim(cc_res))
+      res_list_filt[[paste0(time)]] <- cc_res[which(cc_res$padj < 0.1),]
+      print(dim(cc_res[which(cc_res$padj < 0.1),]))
+}
+
+saveRDS(res_list, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/DESEQ_results_no_prefilter.Rds'))
+saveRDS(res_list_filt, paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/DESEQ_results_no_prefilter_01.Rds'))
+```
+
+# 3. Create DF
+
+```{r}
+res_list <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/DESEQ_results_no_prefilter.Rds')
+# Take logFC
+logFC_list <- list()
+for (condition in names(res_list)){
+  subset <- as.data.frame(res_list[[condition]][,'log2FoldChange',drop=FALSE])
+  colnames(subset) <- condition
+  Q <- quantile(subset[,1], probs=c(.1, .9), na.rm = FALSE)
+  iqr <- IQR(subset[,1])
+  up <-  Q[2]+1.5*iqr # Upper Range  
+  low<- Q[1]-1.5*iqr # Lower Range
+  subset <- subset[which(subset[,1] < up & subset[,1] > low),,drop=FALSE]
+  logFC_list[[condition]] <- subset
+}
+# Merge
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(logFC_list, function(x) { x$id <- rownames(x); x }))
+colnames(df) <- c("id", names(logFC_list))
+rownames(df) <- df[,1]
+df <- df[,-1]
+df_fc <- df
+colnames(df_fc) <- paste0('LogFC_', colnames(df_fc))
+
+# Take logFC
+logFC_list <- list()
+for (condition in names(res_list)){
+  subset <- as.data.frame(res_list[[condition]][,'padj',drop=FALSE])
+  colnames(subset) <- condition
+  Q <- quantile(subset[,1], probs=c(.1, .9), na.rm = FALSE)
+  iqr <- IQR(subset[,1])
+  up <-  Q[2]+1.5*iqr # Upper Range  
+  low<- Q[1]-1.5*iqr # Lower Range
+  subset <- subset[which(subset[,1] < up & subset[,1] > low),,drop=FALSE]
+  logFC_list[[condition]] <- subset
+}
+# Merge
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(logFC_list, function(x) { x$id <- rownames(x); x }))
+colnames(df) <- c("id", names(logFC_list))
+rownames(df) <- df[,1]
+df <- df[,-1]
+colnames(df) <- paste0('pAdj_', colnames(df))
+df <- cbind(df, df_fc[rownames(df),])
+
+saveRDS(df, '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/DESEQ_logFC_padj_frame.RDS')
+```
+
+# 4. Binarize
+
+```{r}
+matrix_full <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/DESEQ_logFC_padj_frame.RDS')
+matrix_fc <- matrix_full[,grep('Log', colnames(matrix_full))]
+head(matrix_fc)
+matrix_padj <- matrix_full[,-grep('Log', colnames(matrix_full))]
+head(matrix_padj)
+```
+
+```{r}
+enhancer_info <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info.RDS')
+class_broad <- as.vector(unlist(enhancer_info$pattern))
+names(class_broad) <- enhancer_info[,1]
+```
+
+```{r}
+library(ggplot2)
+out <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/thr_plots/'
+dir.create(out)
+enhancer_selection <- list()
+enhancer_list <-  list()
+enhancer_list_strict <- list()
+regions_passing_thresholds <- list()
+enhancer_list_medium <- list()
+
+for (name in colnames(matrix_fc)){
+  # Set sample data
+  print(paste0("Sample: ",name))
+  keep_1 <- rownames(matrix_fc)[!is.na(matrix_fc[,name])]
+  sample <- as.data.frame(cbind(matrix_fc[keep_1,name,drop=FALSE], class_broad[keep_1]))
+  print(paste0("Regions passing 1st DESEQ threshold: ",nrow(sample)))
+  keep_1 <- rownames(matrix_padj)[!is.na(matrix_padj[,gsub('LogFC', 'pAdj', name)])]
+  sample <- sample[which(rownames(sample) %in% keep_1),]
+  print(paste0("Regions passing 2nd DESEQ threshold: ",nrow(sample)))
+  colnames(sample) <- c('CPM.Input.BasalNorm', 'class_broad')
+  sample[,1] <- as.numeric(sample[,1])
+
+  ## Use median
+  location <- median(x = as.numeric(sample[grep('Shuffle', rownames(sample)), 'CPM.Input.BasalNorm']))
+  print(paste0("Median: ",location))
+  scale <- mad(x = as.numeric(sample[grep('Shuffle', rownames(sample)), 'CPM.Input.BasalNorm']))
+  # Check fit
+  p2 <- ggplot(data = sample, mapping = aes(x = CPM.Input.BasalNorm, fill = class_broad)) +
+          geom_density(size = 0, alpha = .5) +  
+          stat_function(fun = dnorm, args = list(mean = location, sd = scale)) + 
+          theme_classic() +
+          labs(title = name) + labs(x = "Log FC", y = "Density", fill='Enhancer class')
+  pdf(paste0(out, name, '_dist.pdf'))
+  print(p2)
+  dev.off()
+  print(p2)
+  # Determine p-values for all
+  sample$pvalue <- pnorm(q = sample$CPM.Input.BasalNorm, mean = location, sd = scale, lower.tail = F)
+  sample$padj <- p.adjust(p = sample$pvalue, method = "fdr")
+  p3 <- ggplot(data = sample, mapping = aes(x = padj < 0.1, fill = class_broad)) + 
+          geom_bar() +
+          theme_classic() +
+          labs(title = name) + labs(x = "Adjusted p-value < 0.1", y = "Number of regions", fill='Enhancer class') +
+  scale_x_discrete(labels=c("Not Active", "Active"))
+  pdf(paste0(out, name, '_barplot.pdf'))
+  print(p3)
+  dev.off()
+  print(p3)
+  p4 <- ggplot(sample, aes(x = padj, y = CPM.Input.BasalNorm, fill = class_broad)) +
+  geom_point(pch = 21, size = 3) +
+  geom_vline(xintercept = 0.05, linetype="dashed", color = "black", size = 0.5) +
+  theme(panel.background = element_blank(),
+        panel.grid = element_blank(),
+        axis.text = element_text(color = "black", size = 7),
+        axis.title = element_text(size = 8),
+        legend.key = element_blank(),
+        legend.title = element_text(size = 7),
+        legend.text = element_text(size = 7),
+        legend.key.size = unit(0.8,"line")) + 
+  ggtitle(label = paste0(name)) 
+  print(p4)
+  # Get stats
+  print(paste('Sample:', name))
+  print("Proportions of active enhancers:")
+  print(nrow(sample[which(sample$padj < 0.1),])/sum(class_broad[keep_1] != "Shuffle")*100)
+  print(paste0("Percentage of active shuffled: ", nrow(sample[sample$padj < 0.1 & sample$class_broad == "Shuffle",])/sum(class_broad[keep_1] != "Shuffle")*100, "%"))
+  print(paste0("Number of active tiles: ",nrow(sample[sample$padj < 0.1,])))
+  print("")
+  # Save results
+  colnames(sample)[1] <- 'LogFC'
+  colnames(sample)[2] <- 'Region_type'
+  colnames(sample)[3] <- 'Enhancer_class'
+  enhancer_selection[[name]] <- sample
+  enhancer_list[[name]] <- rownames(sample[which(sample$padj < 0.1),])
+  enhancer_list_medium[[name]] <- rownames(sample[which(sample$padj < 0.05),])
+  enhancer_list_strict[[name]] <- rownames(sample[which(sample$padj < 0.01),])
+}
+```
+
+```{r}
+saveRDS(enhancer_selection, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Gaussian_thr_on_DESEQ_values_strict.RDS')
+```
+
+```{r}
+# As data frame
+enhancer_list <- list()
+for (name in names(enhancer_selection)){
+  enhancer_list[[name]] <- rownames(enhancer_selection[[name]][which(enhancer_selection[[name]]$padj < 1),])
+  enhancer_selection[[name]] <- enhancer_selection[[name]][,c('LogFC', 'padj')]
+  colnames(enhancer_selection[[name]]) <- paste0(gsub('LogFC_', '',name), '_', colnames(enhancer_selection[[name]]))
+}
+
+df <- Reduce(
+    function(x, y) merge(x, y, by = "id", all = T),
+    lapply(enhancer_selection, function(x) { x$id <- rownames(x); x }))
+rownames(df) <- df[,1]
+df <- df[,-1]
+saveRDS(df, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invitro/Gaussian_thr_on_DESEQ_values_selected_strict_df.RDS')
+```
+
+# 5. Add to master frame
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info.RDS')
+rownames(enhancers) <- enhancers[,1]
+enhancers
+```
+
+```{r}
+invivo_activity <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invitro/Gaussian_thr_on_DESEQ_values_selected_strict_df.RDS')
+```
+
+```{r}
+enhancers <- merge(enhancers, invivo_activity, by=0, all=TRUE) 
+rownames(enhancers) <- enhancers[,1]
+enhancers <- enhancers[,-1]
+```
+
+```{r}
+saveRDS(enhancers, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+```
+
+# 6. Plot correlations
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+df <- enhancers[,c("HepG2_LogFC", "Mouse24hr_LogFC", "Mouse48hr_LogFC", "DL_Active")]
+df <- df[-which(df[,1] < -4),]
+df <- df[-which(df[,2] < -4),]
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/cheqseq_correlation_experiments.pdf')
+library(psych)
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+dev.off()
+```
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+df <- enhancers[,c("HepG2_LogFC", "Mouse48hr_LogFC", "DL_Active")]
+colnames(df) <- c('HepG2', 'Mouse', 'DeepLiver')
+df <- df[-which(df[,1] < -4),]
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/cheqseq_correlation_experiments_no24hr.pdf')
+library(psych)
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+dev.off()
+```
+
+# 7. Simplified violin plots per class per sample
+
+```{r}
+library(ggpubr)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+enhancers$pattern <- gsub('CTRL', 'Positive control', enhancers$pattern)
+enhancers$pattern <- gsub('PC', 'Pericentral', enhancers$pattern)
+enhancers$pattern <- gsub('PP', 'Periportal', enhancers$pattern)
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Pericentral'="#00C08E", 'Mutation'='orange')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_Mouse48hr.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_HepG2.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/Simplified classes_Mouse24hr.pdf')
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse24hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+ggplot(enhancers, aes(x = reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse24hr_LogFC, fill=reorder(pattern, -Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+# 8. Violin plots per class per mutation per sample
+
+```{r}
+library(ggpubr)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("CTRL"= c[8], 'Shuffle'='red',  'PP' = "#9CA700", 'PC'="#00C08E", 'Hnf1a-GOF'='#fbb922', 'Hnf1a-LOF'='#fbb922', 'Tcf7l1/2-LOF'='#ec6730', 'Tcf7l1/2-GOF'='#ec6730', 'Tbx3-LOF'='#f7bfca', 'Tbx3-GOF'='#f7bfca', 'Cebpa-GOF'='#4783c4', 'Cebpa-LOF'='#4783c4', 'Foxa1-LOF'='#e94647', 'Foxa1-GOF'='#e94647', 'Hnf4a-GOF'='#278d37', 'Hnf4a-LOF'='#278d37', 'Onecut1-LOF'='#6d4796', 'Onecut1-GOF'='#6d4796')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+df <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+ml <- list()
+t <- table(as.vector(unlist(strsplit(df$mutation_edited, split = "_"))))
+t <- t[which(t > 5)]
+mut <- names(t)
+mut <- mut[-which(mut == 'Ets-LOF')]
+#mut <- names(table(as.vector(unlist(strsplit(df$mutation_edited, split = "_")))))
+for (m in mut){
+  x <- df[grep(m, df$mutation_edited),]
+  x$mut <- rep(m, nrow(x))
+  ml[[m]] <- x
+  
+}
+all <- data.table::rbindlist(ml)
+all$mut[grep('WT', all$mutation)] <- df[grep('WT', df$mutation), 'pattern'] 
+enhancers <- all
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/All classes_Mouse48hr_flipped.pdf')
+ggplot(enhancers, aes(x = reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+dev.off()
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/bulk/All classes_HepG2_flipped.pdf')
+ggplot(enhancers, aes(x = reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+dev.off()
+
+ggplot(enhancers, aes(x = reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE), y = Mouse48hr_LogFC, fill=reorder(mut, Mouse48hr_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+ggplot(enhancers, aes(x = reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(mut, HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + coord_flip()
+```
+
+
+
+# 9. Correlation plot between DL and mouse 48hr indicating the mutations
+
+```{r}
+.distinctColorPalette <-function(k) {
+  set.seed(123)
+  if(packageVersion("scales") >= '1.1.0'){
+    ColorSpace <- t(unique(col2rgb(scales::hue_pal(l=85)(2e3))))
+  } else {
+    ColorSpace <- t(unique(col2rgb(scales::hue_pal(l=60:100)(2e3))))
+  }
+  km <- kmeans(ColorSpace, k, iter.max=20)
+  colors <- rgb(round(km$centers), maxColorValue=255)
+  return(colors)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+x <- enhancers[,c('DL_Active', 'Mouse48hr_LogFC')]
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- 'N'
+  df$z[-grep(pos, common_regions)] <- 'N'
+  df$z[grep('Shuffle', common_regions)] <- 'N'
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  #p <- ggplot(df, aes(x,y, colour=color)) +
+  #  geom_point() +
+  #  geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("DeepLiver") + ylab("Mouse LogFC") + ggtitle(name)
+  #print(p)
+  #pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/invivo_vs_deepliver/', name, '.pdf'), height=8, width=8)
+  #print(p)
+  #dev.off()
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/invivo_vs_deepliver_coloring/', name, '.pdf'), height=8, width=8)
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("DeepLiver") + ylab("Mouse LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  print(p)
+}
+```
+
+```{r, fig.height = 4, fig.width = 4, fig.align = "center", message = FALSE, warnings = FALSE}
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+x <- enhancers[,c('HepG2_LogFC', 'Mouse48hr_LogFC')]
+colnames(x) <- c('X', 'Y')
+common_regions <- rownames(x)
+enhancer_coords <- sapply(strsplit(common_regions, split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", common_regions)
+coordinates_taken <- paste0(sapply(strsplit(common_regions, split = "_"), tail, 3)[1,], '_',sapply(strsplit(common_regions, split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+y <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+
+for (name in unique(enhancers)){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  color_vector <- rep('Not_selected', length(common_regions))
+  names(color_vector) <- common_regions
+  color_vector[grep(enhancer, names(color_vector))] <- 'Selected'
+  color_vector[-grep(pos, names(color_vector))] <- 'Not_selected'
+  color_vector[grep('Shuffle', names(color_vector))] <- 'Not_selected'
+  #create data
+  df <- data.frame(x=x[,1],
+                   y=x[,2],
+                   z=common_regions,
+                   color=color_vector)
+  df$z <- y[common_regions,'mutation_edited']
+  df$z[-grep(enhancer, common_regions)] <- 'N'
+  df$z[-grep(pos, common_regions)] <- 'N'
+  df$z[grep('Shuffle', common_regions)] <- 'N'
+  df$color <- as.factor(df$color)
+  df <- df[complete.cases(df),]
+  #create scatterplot with a label on every point
+  p <- ggplot(df, aes(x,y, colour=color)) +
+    geom_point() +
+    geom_text_repel(aes(label = z), force=2.5) + scale_color_manual(values=c("#D3D3D380", 'red')) + theme_bw() + NoLegend() + xlab("HepG2 LogFC") + ylab("Mouse LogFC") + ggtitle(name)
+  #print(p)
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/invivo_vs_hepg2/', name, '.pdf'), height=8, width=8)
+  print(p)
+  dev.off()
+  if (length(table(df$z)) < 10){
+    cols <- brewer.pal(length(table(df$z)), 'Set1')
+  } else {
+    cols <- .distinctColorPalette(length(table(df$z)))
+  }
+  pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/invivo_vs_hepg2_coloring/', name, '.pdf'), height=8, width=8)
+  names(cols) <- names(table(df$z))
+  cols['N'] <-  adjustcolor( "grey", alpha= 0.7)
+  cols['WT'] <- 'black'
+  colScale <- scale_color_manual(values = cols) 
+  p <- ggplot(df, aes(x,y, colour=z)) +
+  geom_point() +
+  theme_bw() + xlab("HepG2 LogFC") + ylab("Mouse LogFC") + ggtitle(name) + colScale
+  print(p)
+  dev.off()
+  print(p)
+}
+```
+
+# 10. Make barplots with change per enhancer
+
+```{r, fig.height = 44, fig.width = 34}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/all_barplots_PC.pdf', height=44, width=24)
+x <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/facs_mpra/Enhancer_info_wbulk.RDS')
+par(mfrow=c(11,6))
+#load ggplot2 & ggrepel for easy annotations
+library(ggplot2)
+library(ggrepel)
+x <- x[,c('HepG2_LogFC', 'Mouse48hr_LogFC', 'Shift_WT_DL_Active', "mutation_edited")]
+enhancer_coords <- sapply(strsplit(rownames(x), split = "_"), "[", 1)
+enhancer_mutations <- sub("^([^_]+_[^_]+)_.*", "\\1", rownames(x))
+coordinates_taken <- paste0(sapply(strsplit(rownames(x), split = "_"), tail, 3)[1,], '_',sapply(strsplit(rownames(x), split = "_"), tail, 3)[2,])
+e2g <- c('AldoB_G', 'Glul_PC', 'Glul_PC', 'Slc19a2_PC', 'Plxna2_PP', 'Tmeff2_PC', 'Arg1_PP', 'Hal_PP', 'Acly_PP', 'Aspg_PP', 'Pde4d_PC',
+         'Akr1c20_PC', 'Tsc22d1_PC', 'C6_PC', 'Pdia5_PP', 'Dlgap1_PP', 'Crim1_PC', 'Aldh1a1_PC', 'Gldc_PP', 'Abcc2_PC', 'Ass1_PP',
+         'Cobll1_PC', 'Human_neg_control', 'Pdgfc_PC', 'Gne_PC', 'Chd7_PP', 'Hsd17b13_PP', 'Hip1r_PC', 'Pparg_PC', 'Cyp2e1_PC', 
+         'Cyp2a5_PC', 'Cdh1_PP', 'Cdh1_PP', 'Sgcz_PC', 'Tenm3_PC', 'LTV1_G')
+names(e2g) <- unique(enhancer_coords)
+coordinates_taken[grep('Shuffle', coordinates_taken)] <- 'Shuffle'
+enhancers <- unique(paste0(enhancer_coords, '_', e2g[enhancer_coords], '_', coordinates_taken))
+enhancers <- enhancers[-grep('Shuffle', enhancers)]
+
+data_name <- vector()
+data_value <- vector()
+for (name in unique(enhancers)[grep('PC', unique(enhancers))]){
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  sub <- x[grep(enhancer, rownames(x)),]
+  sub <- sub[grep(pos, rownames(sub)),]
+  sub <- sub[complete.cases(sub),]
+  sub$log2FoldChange <- sub$HepG2_LogFC+abs(min(sub$HepG2_LogFC))+1
+  
+  if (length(grep('Shuffle', rownames(sub))) > 0){
+    sub <- sub[-grep('Shuffle', rownames(sub)),]
+  }
+  control_value <- sub[grep('WT', rownames(sub)), 'log2FoldChange']
+  if (length(control_value) > 0){
+      if (length(control_value) > 1){
+        control_value <- mean(control_value)
+       }
+    data_name <- c(data_name, rownames(sub))
+    data_value <- c(data_value, sub$log2FoldChange/control_value)
+    print('H')
+    pdata <- sub$log2FoldChange/control_value
+    if (length(pdata) > 1){
+        names(pdata) <- sub$mu
+        names(pdata) <- sub("^([^_]+_[^_]+)_.*", "\\1", names(pdata))
+        names(pdata) <- sub(paste0(enhancer, '_'), "", names(pdata))
+        pdata <- rev(sort(pdata))
+        col <- rep('grey', length(pdata))
+        col[which(pdata > 1)] <- 'forestgreen'
+        col[which(pdata < 1)] <- 'brown1'
+        par(mar=c(20,6,1,1))
+        par(las=2)
+        barplot(pdata, col=col, ylab='HepG2 LogFC')
+    }
+  }
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  sub <- x[grep(enhancer, rownames(x)),]
+  sub <- sub[grep(pos, rownames(sub)),]
+  sub <- sub[complete.cases(sub),]
+  sub$log2FoldChange <- sub$Mouse48hr_LogFC+abs(min(sub$Mouse48hr_LogFC))+1
+  
+  if (length(grep('Shuffle', rownames(sub))) > 0){
+    sub <- sub[-grep('Shuffle', rownames(sub)),]
+  }
+  control_value <- sub[grep('WT', rownames(sub)), 'log2FoldChange']
+  if (length(control_value) > 0){
+      if (length(control_value) > 1){
+        control_value <- mean(control_value)
+       }
+    data_name <- c(data_name, rownames(sub))
+    data_value <- c(data_value, sub$log2FoldChange/control_value)
+    print('M')
+    pdata <- sub$log2FoldChange/control_value
+    if (length(pdata) > 1){
+        names(pdata) <- rownames(sub)
+        names(pdata) <- sub("^([^_]+_[^_]+)_.*", "\\1", names(pdata))
+        names(pdata) <- sub(paste0(enhancer, '_'), "", names(pdata))
+        pdata <- rev(sort(pdata))
+        col <- rep('grey', length(pdata))
+        col[which(pdata > 1)] <- 'forestgreen'
+        col[which(pdata < 1)] <- 'brown1'
+        par(mar=c(20,6,1,1))
+        par(las=2)
+        barplot(pdata, main=name, col=col, ylab='Mouse LogFC')
+    }
+  }
+  # matrix
+  enhancer <- strsplit(name, split='_')[[1]][1]
+  pos <- paste0(strsplit(name, split='_')[[1]][4], '_', strsplit(name, split='_')[[1]][5])
+  sub <- x[grep(enhancer, rownames(x)),]
+  sub <- sub[grep(pos, rownames(sub)),]
+  sub <- sub[complete.cases(sub),]
+  sub$log2FoldChange <- sub$Shift_WT_DL_Active
+  
+  if (length(grep('Shuffle', rownames(sub))) > 0){
+    sub <- sub[-grep('Shuffle', rownames(sub)),]
+  }
+  control_value <- sub[grep('WT', rownames(sub)), 'log2FoldChange']
+  if (length(control_value) > 0){
+      if (length(control_value) > 1){
+        control_value <- mean(control_value)
+       }
+    data_name <- c(data_name, rownames(sub))
+    data_value <- c(data_value, sub$log2FoldChange/control_value)
+      
+    pdata <- sub$log2FoldChange
+    print('A')
+    if (length(pdata) > 1){
+        names(pdata) <- rownames(sub)
+        names(pdata) <- sub("^([^_]+_[^_]+)_.*", "\\1", names(pdata))
+        names(pdata) <- sub(paste0(enhancer, '_'), "", names(pdata))
+        pdata <- rev(sort(pdata))
+        col <- rep('grey', length(pdata))
+        col[which(pdata > 0)] <- 'forestgreen'
+        col[which(pdata < 0)] <- 'brown1'
+        par(mar=c(20,6,1,1))
+        par(las=2)
+        barplot(pdata,col=col, ylab='DeepLiver')
+    }
+    }
+}
+dev.off()
+```
+
+
+
+

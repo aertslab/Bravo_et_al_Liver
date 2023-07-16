@@ -1,0 +1,370 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Heatmap
+
+```{r}
+topics <- c('Hep_General (1)', 'Hep_PC (2)', 'Hep_PP (3)', 'Hep_PP (4)', 'Hep_PP (5)', 'Hep_PP (6)', 'Hep_General (7)', 'Hep_PC (8)', 'Hep_General (9)', 'Hep_PC (10)', 'Immune_cell (11)', 'HSC (12)', 'Hep_General (13)', 'Non-parenchymal (14)', 'HSC (15)', 'Hep_PC (16)', 'Hep_PP (17)', 'Hep_PC (18)', 'Low_quality (19)', 'Hep_PP (20)', 'LSEC (21)', 'Hep_General (22)', 'Low_quality (23)', 'Immune_cell (24)', 'Hep_General (25)','Low_quality (26)', 'Fibroblast (27)', 'Hep_General (28)', 'Hep_General (29)', 'Hep_General (30)', 'Hep_PP (31)', 'HSC (32)', 'MSC (33)', 'Low quality (34)', 'Hep_PP (35)', 'Hep_PP (36)', 'Hep_PP (37)', 'Kupffer (38)', 'Hep_General (39)', 'Hep_General (40)', 'Hep_PP (41)', 'BEC (42)', 'Hep_General (43)', 'Hep_General (44)', 'Hep_General (45)', 'Hep_Gels neral (46)', 'Hep_PP (47)', 'Hep_General (48)', 'Hep_General (49)', 'Hep_General (50)', 'Hep_PC (51)', 'Hep_General (52)', 'Hep_General (53)', 'Hep_General (54)', 'Hep_General (55)', 'Hep_PC (56)', 'Hep_General (57)', 'Hep_PC (58)', 'Hep_PP (59)', 'Hep_PC (60)', 'Hep_PP (61)', 'Kupffer (62)', 'Hep_General (63)', 'MSC+BEC (64)', 'Hep_PP (65)', 'Hep_PP (66)', 'Hep_General (67)', 'Hep_PP (68)', 'Hep_General (69)', 'Hep_General (70)', 'LSEC (71)', 'Hep_PP (72)', 'Hep_General (73)', 'Hep_General (74)', 'Hep_General (75)', 'Hep_PC (76)', 'Hep_PP (77)', 'Hep_General (78)', 'Hep_General (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+```
+
+```{r}
+cell_topic <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_topic.tsv', sep='\t')
+colnames(cell_topic) <- cell_topic[1,]
+rownames(cell_topic) <- cell_topic[,1]
+cell_topic <- cell_topic[-1,-1]
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_annot.tsv', sep='\t')
+colnames(cell_topic) <- rownames(cell_data) 
+```
+
+```{r}
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom')
+cell_data <- get_cell_annotation(loom)
+cell_data$sample_id <- as.vector(cell_data$sample_id)
+cell_data$sample_id[grep('10x_ATAC_Run_1', cell_data$sample_id)] <- 'snATAC_Fresh_Mouse-6'
+cell_data$sample_id[grep('10x_ATAC_Run_2', cell_data$sample_id)] <- 'snATAC_Fresh_Mouse-7'
+cell_data$sample_id[grep('TEW__043783__Mouse_4_Multiome_10x', cell_data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+cell_data$sample_id[grep('Multiome_NST', cell_data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+rownames(cell_data) <- gsub("-TEW__043783__523d9c__Multiome_Liver_10xprotocol", "-1-TEW__043783__Mouse_4_Multiome_10x",rownames(cell_data))
+rownames(cell_data) <- gsub("-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", "-1-TEW__ebb273__Mouse_5_Multiome_NST",rownames(cell_data))
+cell_data <- cell_data[which(rownames(cell_data) %in% colnames(cell_topic)),]
+my_levels <-   c('snATAC_Fresh_Mouse-6', 'snATAC_Fresh_Mouse-7', 'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+cell_data$sample_id <- factor(x = cell_data$sample_id, levels = my_levels)
+```
+
+```{r}
+cells <- rownames(cell_data)
+group.by <- "Refined_cell_type"
+groups.use <- cell_data[cells, group.by, drop = FALSE]
+group.use <- groups.use[, 1, drop = TRUE]
+group.use <- factor(x = group.use)
+names(x = group.use) <- cells
+group.use <- group.use[c(which(group.use =="Hep_PP_PC_1"), which(group.use =="Hep_PP_PC_2"), which(group.use =="Hep_PP_PC_3"), which(group.use =="Hep_PP_PC_4"), which(group.use =="Hep_PP_PC_5"), which(group.use =="Kupffer"),  which(group.use =="cDC"),  which(group.use =="pDC"),  which(group.use =="B_cell"), which(group.use =="T_cell"),  which(group.use =="LSEC"), which(group.use =="VEC_PC"),  which(group.use =="VEC_PP"), which(group.use == "HSC"), which(group.use == "Fibroblast"),which(group.use == "BEC"), which(group.use == "MSC"))]
+order <- names(x = group.use)
+```
+
+```{r}
+cell_topic <- cell_topic[,order]
+rownames(cell_topic) <- topics
+use <- unique(topics[c(grep('Hep_General', topics), grep('Hep_PP', topics), grep('Hep_PC', topics),  grep('Kupffer', topics),  grep('Kupffer', topics), grep('Immune_cell', topics), grep('B_cell', topics), grep('T_cell', topics), grep('LSEC', topics), grep('VEC', topics), grep('HSC', topics), grep('Fibroblast', topics), grep('BEC', topics),grep('MSC', topics), grep('Low', topics))])
+cell_topic <- cell_topic[use,]
+cell_topic <- t(apply(cell_topic, 1, as.numeric))
+```
+
+```{r}
+library(ComplexHeatmap)
+colors <- scales::hue_pal()(length(unique(groups.use[,1])))
+names(colors) <- sort(unique(groups.use[,1]))
+mat <- cell_topic
+colorPal <- grDevices::colorRampPalette(c('floralwhite', 'red', 'darkred'))
+cellColor <- setNames(colors[groups.use[,1]], rownames(group.use))
+cellColor <- cellColor[order]
+colVars <- list()
+colVars[['Cell_type']] <- colors
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')[2:3]
+c2 <- brewer.pal(3, 'Blues')[2:3]
+colVars[['Sample']]  <- c(c1, c2)
+names(colVars[['Sample']]) <- my_levels
+celltype <- cbind(as.data.frame(groups.use[order,1]),cell_data[order, 'sample_id'])
+colnames(celltype) <- c('Cell_type', 'Sample')
+annotation <- ComplexHeatmap::HeatmapAnnotation(df = celltype, col = colVars, which='column')
+heatmap <- ComplexHeatmap::Heatmap(data.matrix(mat), col=colorPal(20), cluster_columns = FALSE, cluster_rows = FALSE, show_row_dend = FALSE, show_column_names=FALSE, show_row_names = TRUE, top_annotation = annotation, name='Standarized AUC', row_names_gp = gpar(fontsize = 10), heatmap_legend_param = list(legend_direction = "horizontal", legend_width = unit(5, "cm"), title_position='topcenter'), column_title_gp = gpar(fontface = 'bold'))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/plots/topic_heatmap_v4_full.pdf')
+ComplexHeatmap::draw(heatmap, heatmap_legend_side = "bottom", annotation_legend_side = "right")
+dev.off()
+```
+
+# Rename full topics
+
+```{r}
+topics <- c('Low_quality (1)', 'snATAC_Mouse-6 (2)', 'Low_quality (3)', 'snATAC_Mouse-6 (4)', 'MO-NST (5)', 'Hep_General (6)', 'Low_quality (7)', 'Hep_PC (8)', 'snATAC_Mouse-6 (9)', 'Low_quality (10)', 'Immune_cell (11)', 'HSC (12)', 'Low_quality (13)', 'General (14)', 'HSC (15)', 'Hep_PC (16)', 'ZT00-06_PP (17)', 'MO-10x (18)', 'Low_quality (19)', 'Low_quality (20)', 'LSEC (21)', 'Low_quality (22)', 'Low_quality (23)', 'DC (24)', 'MO-NST (25)','Low_quality (26)', 'Fibroblast (27)', 'MO-10x (28)', 'Low_quality (29)', 'MO-10x (30)', 'Low_quality (31)', 'HSC (32)', 'MSC (33)', 'Low_quality (34)', 'Low_quality (35)', 'Low_quality (36)', 'Hep_General (37)', 'Kupffer (38)', 'Low_quality (39)', 'Low_quality (40)', 'snATAC_Mouse-7 (41)', 'BEC (42)', 'Hep_General (43)', 'MO-NST (44)', 'Low_quality (45)', 'Low_quality (46)', 'Low_quality (47)', 'Hep_General (48)', 'Low_quality (49)', 'ZT12 (50)', 'snATAC_Mouse-6 (51)', 'Low_quality (52)', 'Low_quality (53)', 'Low_quality (54)', 'Low_quality (55)', 'ZT00-06_PC (56)', 'snATAC_Mouse-6 (57)', 'Hep_PC (58)', 'snATAC_Mouse-7 (59)', 'Hep_PC (60)', 'MO-10x (61)', 'Kupffer (62)', 'Low_quality (63)', 'MSC+BEC (64)', 'Low_quality (65)', 'Hep_PP (66)', 'Low_quality (67)', 'snATAC_Mouse-6 (68)', 'Low_quality (69)', 'snATAC_Mouse-6 (70)', 'LSEC (71)', 'Low_quality (72)', 'Low_quality (73)', 'Low_quality (74)', 'ZT12 (75)', 'Hep_PC (76)', 'Low_quality (77)', 'Low_quality (78)', 'Low_quality (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+```
+
+```{r}
+cell_topic <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_topic.tsv', sep='\t')
+colnames(cell_topic) <- cell_topic[1,]
+rownames(cell_topic) <- cell_topic[,1]
+cell_topic <- cell_topic[-1,-1]
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_annot.tsv', sep='\t')
+colnames(cell_topic) <- rownames(cell_data) 
+```
+
+```{r}
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/Liver-cell_gene-all.loom')
+cell_data <- get_cell_annotation(loom)
+cell_data$sample_id <- as.vector(cell_data$sample_id)
+cell_data$sample_id[grep('10x_ATAC_Run_1', cell_data$sample_id)] <- 'snATAC_Fresh_Mouse-6'
+cell_data$sample_id[grep('10x_ATAC_Run_2', cell_data$sample_id)] <- 'snATAC_Fresh_Mouse-7'
+cell_data$sample_id[grep('TEW__043783__Mouse_4_Multiome_10x', cell_data$sample_id)] <- 'Multiome-10x_Fresh_Mouse-4'
+cell_data$sample_id[grep('Multiome_NST', cell_data$sample_id)] <- 'Multiome-NST_Fresh_Mouse-5'
+rownames(cell_data) <- gsub("-TEW__043783__523d9c__Multiome_Liver_10xprotocol", "-1-TEW__043783__Mouse_4_Multiome_10x",rownames(cell_data))
+rownames(cell_data) <- gsub("-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", "-1-TEW__ebb273__Mouse_5_Multiome_NST",rownames(cell_data))
+cell_data <- cell_data[which(rownames(cell_data) %in% colnames(cell_topic)),]
+my_levels <-   c('snATAC_Fresh_Mouse-6', 'snATAC_Fresh_Mouse-7', 'Multiome-10x_Fresh_Mouse-4', 'Multiome-NST_Fresh_Mouse-5')
+cell_data$sample_id <- factor(x = cell_data$sample_id, levels = my_levels)
+```
+
+
+```{r}
+cells <- rownames(cell_data)
+group.by <- "Refined_cell_type"
+groups.use <- cell_data[cells, group.by, drop = FALSE]
+group.use <- groups.use[, 1, drop = TRUE]
+group.use <- factor(x = group.use)
+names(x = group.use) <- cells
+group.use <- group.use[c(which(group.use =="Hep_PP_PC_1"), which(group.use =="Hep_PP_PC_2"), which(group.use =="Hep_PP_PC_3"), which(group.use =="Hep_PP_PC_4"), which(group.use =="Hep_PP_PC_5"), which(group.use =="Kupffer"),  which(group.use =="cDC"),  which(group.use =="pDC"),  which(group.use =="B_cell"), which(group.use =="T_cell"),  which(group.use =="LSEC"), which(group.use =="VEC_PC"),  which(group.use =="VEC_PP"), which(group.use == "HSC"), which(group.use == "Fibroblast"),which(group.use == "BEC"), which(group.use == "MSC"))]
+order <- names(x = group.use)
+```
+
+```{r}
+cell_topic <- cell_topic[,order]
+rownames(cell_topic) <- topics
+use <- unique(topics[c(grep('Hep_General', topics), grep('Hep_PP', topics), grep('Hep_PC', topics),  grep('Non-par', topics), grep('Kupffer', topics),  grep('Kupffer', topics), grep('Immune_cell', topics), grep('B_cell', topics), grep('T_cell', topics), grep('LSEC', topics), grep('VEC', topics), grep('HSC', topics), grep('Fibroblast', topics), grep('BEC', topics),grep('MSC', topics), grep('ZT00-06', topics), grep('ZT12', topics), grep('snATAC_Mouse-6', topics), grep('snATAC_Mouse-7', topics), grep('MO-10x', topics), grep('MO-NST', topics), grep('Low', topics))])
+cell_topic <- cell_topic[use,]
+cell_topic <- t(apply(cell_topic, 1, as.numeric))
+```
+
+```{r}
+library(ComplexHeatmap)
+colors <- scales::hue_pal()(length(unique(groups.use[,1])))
+names(colors) <- sort(unique(groups.use[,1]))
+mat <- cell_topic
+colorPal <- grDevices::colorRampPalette(c('floralwhite', 'red', 'darkred'))
+cellColor <- setNames(colors[groups.use[,1]], rownames(group.use))
+cellColor <- cellColor[order]
+colVars <- list()
+colVars[['Cell_type']] <- colors
+library(RColorBrewer)
+c1 <- brewer.pal(4, 'Reds')[2:3]
+c2 <- brewer.pal(3, 'Blues')[2:3]
+colVars[['Sample']]  <- c(c1, c2)
+names(colVars[['Sample']]) <- my_levels
+celltype <- cbind(as.data.frame(groups.use[order,1]),cell_data[order, 'sample_id'])
+colnames(celltype) <- c('Cell_type', 'Sample')
+annotation <- ComplexHeatmap::HeatmapAnnotation(df = celltype, col = colVars, which='column')
+heatmap <- ComplexHeatmap::Heatmap(data.matrix(mat), col=colorPal(20), cluster_columns = FALSE, cluster_rows = FALSE, show_row_dend = FALSE, show_column_names=FALSE, show_row_names = TRUE, top_annotation = annotation, name='Standarized AUC', row_names_gp = gpar(fontsize = 10), heatmap_legend_param = list(legend_direction = "horizontal", legend_width = unit(5, "cm"), title_position='topcenter'), column_title_gp = gpar(fontface = 'bold'))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/plots/topic_heatmap_v4_full_renamed.pdf')
+ComplexHeatmap::draw(heatmap, heatmap_legend_side = "bottom", annotation_legend_side = "right")
+dev.off()
+```
+
+# Subset
+
+
+```{r}
+topics <- c('Hep_General (1)', 'Hep_PC (2)', 'Hep_PP (3)', 'Hep_PP (4)', 'Hep_PP (5)', 'Hep_PP (6)', 'Hep_General (7)', 'Hep_PC (8)', 'Hep_General (9)', 'Hep_PC (10)', 'Immune_cell (11)', 'HSC (12)', 'Hep_General (13)', 'General (14)', 'HSC (15)', 'Hep_PC (16)', 'Hep_PP (17)', 'Hep_PC (18)', 'Low_quality (19)', 'Hep_PP (20)', 'VEC (21)', 'Hep_General (22)', 'Low_quality (23)', 'Immune_cell (24)', 'Hep_General (25)','Low_quality (26)', 'Fibroblast (27)', 'Hep_General (28)', 'Hep_General (29)', 'Hep_General (30)', 'Hep_PP (31)', 'HSC (32)', 'MSC (33)', 'Low quality (34)', 'Hep_PP (35)', 'Hep_PP (36)', 'Hep_PP (37)', 'Kupffer (38)', 'Hep_General (39)', 'Hep_General (40)', 'Hep_PP (41)', 'BEC (42)', 'Hep_General (43)', 'Hep_General (44)', 'Hep_General (45)', 'Hep_General (46)', 'Hep_PP (47)', 'Hep_General (48)', 'Hep_General (49)', 'Hep_General (50)', 'Hep_PC (51)', 'Hep_General (52)', 'Hep_General (53)', 'Hep_General (54)', 'Hep_General (55)', 'Hep_PC (56)', 'Hep_General (57)', 'Hep_PC (58)', 'Hep_PP (59)', 'Hep_PC (60)', 'Hep_PP (61)', 'Kupffer (62)', 'Hep_General (63)', 'MSC+BEC (64)', 'Hep_PP (65)', 'Hep_PP (66)', 'Hep_General (67)', 'Hep_PP (68)', 'Hep_General (69)', 'Hep_General (70)', 'LSEC (71)', 'Hep_PP (72)', 'Hep_General (73)', 'Hep_General (74)', 'Hep_General (75)', 'Hep_PC (76)', 'Hep_PP (77)', 'Hep_General (78)', 'Hep_General (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+```
+
+```{r}
+cell_topic <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_topic.tsv', sep='\t')
+colnames(cell_topic) <- cell_topic[1,]
+rownames(cell_topic) <- cell_topic[,1]
+cell_topic <- cell_topic[-1,-1]
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_annot.tsv', sep='\t')
+```
+
+```{r}
+#Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+cell_data <- Seurat_RNA@meta.data
+rownames(cell_data) <- gsub("-TEW__043783__523d9c__Multiome_Liver_10xprotocol", "-1-TEW__043783__Mouse_4_Multiome_10x",rownames(cell_data))
+rownames(cell_data) <- gsub("-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", "-1-TEW__ebb273__Mouse_5_Multiome_NST",rownames(cell_data))
+cell_data <- cell_data[which(rownames(cell_data) %in% colnames(cell_topic)),]
+hepatocytes <- cell_data[grep('Hep', cell_data$Refined_cell_type),]
+hepatocytes <- hepatocytes[order(hepatocytes$Hep_pseudotime),]
+HSC <- cell_data[grep('HSC', cell_data$Refined_cell_type),]
+HSC <- HSC[order(HSC$HSC_pseudotime),]
+LSEC <- cell_data[grep('LSEC', cell_data$Refined_cell_type),]
+LSEC <- LSEC[order(-LSEC$LSEC_pseudotime),]
+cell_data <- cell_data[-c(grep('Hep', cell_data$Refined_cell_type), grep('HSC', cell_data$Refined_cell_type), grep('LSEC', cell_data$Refined_cell_type)),]
+cell_data <- rbind(hepatocytes, HSC, LSEC, cell_data)
+```
+
+```{r}
+cells <- rownames(cell_data)
+group.by <- "Refined_cell_type"
+groups.use <- cell_data[cells, group.by, drop = FALSE]
+group.use <- groups.use[, 1, drop = TRUE]
+group.use <- factor(x = group.use)
+names(x = group.use) <- cells
+group.use <- group.use[c(which(group.use =="Hep_PP_PC_1"), which(group.use =="Hep_PP_PC_2"), which(group.use =="Hep_PP_PC_3"), which(group.use =="Hep_PP_PC_4"), which(group.use =="Hep_PP_PC_5"), which(group.use =="Kupffer"),  which(group.use =="cDC"),  which(group.use =="pDC"),  which(group.use =="B_cell"), which(group.use =="T_cell"),  which(group.use =="LSEC"), which(group.use =="VEC_PC"),  which(group.use =="VEC_PP"), which(group.use == "HSC"), which(group.use == "Fibroblast"),which(group.use == "BEC"), which(group.use == "MSC"))]
+order <- names(x = group.use)
+```
+
+
+```{r}
+cell_topic <- cell_topic[,order]
+rownames(cell_topic) <- topics
+#use <- c(48, 66, 58, 38, 71, 32, 27, 42)
+# 50 is also ok
+# 43 is also ok
+use <- c(43, 48, 66, 60, 58, 38, 11, 81, 82, 71, 21, 32, 27, 42, 64, 33)
+
+cell_topic <- cell_topic[use,]
+cell_topic <- t(apply(cell_topic, 1, as.numeric))
+cell_topic[1,] <- cell_topic[1,]+cell_topic[2,]
+cell_topic <- cell_topic[-2,]
+```
+
+```{r}
+library(ComplexHeatmap)
+library(scales)
+colors <- hue_pal()(length(unique(groups.use[,1])))
+names(colors) <- sort(unique(groups.use[,1]))
+mat <- cell_topic
+#mat <- t(t(mat)/colSums(mat))
+#colSums(mat)
+colorPal <- grDevices::colorRampPalette(c('floralwhite', 'red', 'red', 'darkred'))
+cellColor <- setNames(colors[groups.use[,1]], rownames(group.use))
+cellColor <- cellColor[order]
+colVars <- list()
+colVars[['Cell_type']] <- colors
+celltype <- as.data.frame(groups.use[order,1])
+colnames(celltype) <- 'Cell_type'
+annotation <- ComplexHeatmap::HeatmapAnnotation(df = celltype, col = colVars, which='column')
+heatmap <- ComplexHeatmap::Heatmap(data.matrix(mat), col=colorPal(100), cluster_columns = FALSE, cluster_rows = FALSE, show_row_dend = FALSE, show_column_names=FALSE, show_row_names = TRUE, top_annotation = annotation, name='Topic probability', row_names_gp = gpar(fontsize = 12), heatmap_legend_param = list(legend_direction = "horizontal", legend_width = unit(5, "cm"), title_position='topcenter'), column_title_gp = gpar(fontface = 'bold'))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/plots/topic_heatmap_v4.pdf')
+ComplexHeatmap::draw(heatmap, heatmap_legend_side = "bottom", annotation_legend_side = "right")
+dev.off()
+```
+
+# Make GO map
+
+```{r}
+data <- read.delim('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pyGREAT/results_combined.tsv',sep='\t')
+use <- paste0('Topic',c(48, 66, 60, 58, 38, 11, 81, 82, 71, 21, 32, 27, 42, 64, 33, 17, 75, 2, 41, 18, 44))
+```
+
+```{r}
+data_list <- split(data , f = data$Topic)[use]
+names(data_list)
+```
+
+```{r}
+data_list_reduced <- list()
+library(rrvgo)
+library(org.Mm.eg.db)
+for (name in names(data_list)){
+  go_analysis <- data_list[[name]]
+  simMatrix <- calculateSimMatrix(go_analysis$ID,
+                                orgdb=org.Mm.eg.db,
+                                ont="BP",
+                                method="Rel")
+
+  scores <- setNames(-log10(go_analysis$BinomBonf), go_analysis$ID)
+  reducedTerms <- reduceSimMatrix(simMatrix,
+                                scores,
+                                threshold=0.7,
+                                orgdb="org.Mm.eg.db")
+  #reducedTerms <- reducedTerms[!duplicated(reducedTerms$parentTerm),]
+  data_list_reduced[[name]] <- reducedTerms
+  if (Inf %in% as.vector(unlist(reducedTerms$score))){
+    reducedTerms <- reducedTerms[-which(reducedTerms$score == Inf),]
+  }
+  #treemapPlot(reducedTerms)
+}
+
+for (name in names(data_list)){
+  data_list_reduced[[name]]$Topic <- rep(name, nrow(data_list_reduced[[name]]))
+}
+
+saveRDS(reducedTerms, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pyGREAT/clustered_annotations.RDS')
+```
+
+```{r}
+treemapPlot(data_list_reduced[['Topic66']])
+```
+
+```{r}
+treemapPlot(data_list_reduced[['Topic60']])
+```
+
+```{r}
+for (name in names(data_list)){
+  if (Inf %in% as.vector(unlist(data_list_reduced[[name]]$score))){
+    data_list_reduced[[name]] <- data_list_reduced[[name]][-which(data_list_reduced[[name]]$score == Inf),]
+  }
+}
+treemapPlot(data_list_reduced[['Topic43']])
+```
+
+```{r}
+t <- data_list_reduced[[name]]
+for (name in names(data_list)){
+  data_list_reduced[[name]] <- merge(data_list_reduced[[name]], data_list[[name]][,c('Desc','BinomBonfP', "RegionFoldEnrich")], by.x = 'term', by.y = 'Desc')
+}
+```
+
+```{r}
+data_merged <- data.table::rbindlist(data_list_reduced)
+```
+
+```{r}
+data_merged[rev(order(data_merged$score)),]
+se <- paste0('Topic',c(48, 66, 60, 58, 38, 11, 81, 82, 71, 21, 32, 27, 42, 64, 33, 17, 75, 2, 41, 18, 44))
+```
+
+```{r}
+data_merged <- data_merged[rev(order(data_merged$score)),]
+data_merged[grep('hepa', data_merged$term), c('term', 'score', 'Topic')]
+```
+
+```{r}
+data_merged[grep('c43$', data_merged$Topic), c('term', 'score', 'Topic')]
+```
+
+```{r}
+# Make dot plot
+selected_go <- c('gluconeogenesis', 'urea cycle',  'cholesterol metabolic process', 'fatty acid oxidation', 'bile acid secretion', 'lipid metabolic process','xenobiotic metabolic process', 'glycosaminoglycan catabolic process', 'glutamine biosynthetic process', 'immune system process', 'regulation of cytokine production', 'B cell activation', 'T cell activation', 'endothelium development', 'vasculature development',  'cellular response to hypoxia', 'cell junction organization', 'collagen metabolic process', 'collagen fibril organization', 'regulation of epithelial to mesenchymal transition', 'epithelial cell differentiation', 'tube morphogenesis', 'hepatoblast differentiation', 'establishment or maintenance of polarity of embryonic epithelium', 'circadian rhythm', 'negative regulation of circadian rhythm', 'response to insulin', 'response to peptide hormone', 'response to growth hormone', 'response to steroid hormone', 'response to nutrient levels')
+```
+
+```{r}
+data_merged_sub <- data_merged[which(data_merged$term %in% selected_go),]
+data_merged_sub$term <- factor(x = data_merged_sub$term, levels = rev(selected_go))
+data_merged_sub$Topic <- factor(x = data_merged_sub$Topic, levels = use)
+```
+
+```{r}
+p <- ggplot(data = data_merged_sub, mapping = aes_string(x = 'Topic', y = 'term')) +
+    geom_point(data = data_merged_sub, mapping = aes_string(size = 'score', color = 'RegionFoldEnrich')) +
+    scale_radius(range = c(0, 5)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1))
+p
+```
+
+```{r}
+library(dplyr)
+range01 <- function(x){(x)/(max(x))}
+data_merged_sub$scaled_score <- data_merged_sub$score
+data_merged_sub <- data_merged_sub %>% group_by(term) %>%
+  mutate(scaled_score = range01(scaled_score))
+data_merged_sub$scaled_RegionFoldEnrich <- data_merged_sub$RegionFoldEnrich
+data_merged_sub <- data_merged_sub %>% group_by(term) %>%
+  mutate(scaled_RegionFoldEnrich = range01(scaled_RegionFoldEnrich))
+data_merged_sub[is.na(data_merged_sub)] <- 1
+```
+
+```{r}
+colorPal <- grDevices::colorRampPalette(c('pink', 'red', 'darkred'))
+p <- ggplot(data = data_merged_sub, mapping = aes_string(x = 'Topic', y = 'term')) +
+    geom_point(data = data_merged_sub, mapping = aes_string(size = 'scaled_score', color = 'scaled_RegionFoldEnrich')) +
+    scale_radius(range = c(0, 5)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+    scale_colour_gradientn(colors=colorPal(100)) 
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pyGREAT/dotplot.pdf', width=10, height=10)
+p
+dev.off()
+```
+

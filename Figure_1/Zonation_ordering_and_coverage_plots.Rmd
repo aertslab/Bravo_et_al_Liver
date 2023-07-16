@@ -1,0 +1,1270 @@
+---
+title: "Liver - Figure 1"
+output: html_notebook
+---
+ 
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+```
+
+## Trajectory heatmap
+
+### For HSC
+
+```{r}
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+# Take only HSC cells and select principal components
+HSC_cells <- rownames(Seurat_RNA@meta.data[grep('HSC', Seurat_RNA@meta.data$Refined_cell_type),])
+HSC <- subset(x = Seurat_RNA, cells = rownames(Seurat_RNA@meta.data[grep('HSC', Seurat_RNA@meta.data$Refined_cell_type),]), invert = FALSE)
+HSC_PC <- HSC@reductions$harmony@cell.embeddings[,1:29] # The number of PCs we know it form a previous analysis
+# Use the corrected principal components to order the cells using diffusion maps
+set.seed(555)
+library(destiny)
+HSC_DiffussionMap <- DiffusionMap(HSC_PC)
+HSC_DPT<- DPT(HSC_DiffussionMap)
+HSC_RNA <- data.frame(Cell_type=as.vector(unlist(HSC@meta.data$Refined_cell_type)), Landmark=rep('CentralVein', length(HSC_cells)), Pseudotime=rank(HSC_DPT$DC1), row.names = HSC_cells)
+# Plot
+library(ggplot2)
+library(ggbeeswarm)
+library(ggthemes)
+ggplot(HSC_RNA, aes(x = Pseudotime, y = Cell_type, colour = Cell_type)) + geom_quasirandom(groupOnX = FALSE) + scale_color_tableau() + theme_classic() + xlab("Diffusion map pseudotime (dpt)") + ylab("Timepoint") + ggtitle("Cells ordered by diffusion map pseudotime")
+# We can also plot the pseudotime as a check-up in the UMAP
+HSC_pseudotime <- HSC_RNA[,'Pseudotime',drop=FALSE]
+colnames(HSC_pseudotime) <- 'HSC_pseudotime'
+Seurat_RNA <- AddMetaData(Seurat_RNA, HSC_pseudotime)
+```
+
+```{r}
+matrix <- Seurat_RNA@assays$RNA@data[,HSC_cells]
+# Plot
+require(gam)
+t <- Seurat_RNA@meta.data[HSC_cells, 'HSC_pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))[1:5000]  
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+```
+
+```{r}
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)[1:5000] 
+library(dplyr)
+topgenes <- topgenes[topgenes<0.01] %>% names()
+length(topgenes)
+markers <- c('Ngfr', 'Igfbp3', 'Tagln', 'Rgs4', 'Spon2', 'Rspo3', 'Adamtsl2', 'Podn')
+topgenes <- c(topgenes, markers[-which(markers %in% topgenes)])
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- Seurat_RNA@assays$RNA@data[,HSC_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt =  Seurat_RNA@meta.data[HSC_cells, 'HSC_pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+colorPal <- grDevices::colorRampPalette(c('dodgerblue', 'floralwhite', 'brown1'))
+dat <- rollapply(dat, width=100, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_v2_roll100.pdf')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE, 
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE, 
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_GAM_PP.pdf')
+markers <- c('Rgs4', 'Igfbp3', 'Ngfr', 'Tagln')
+matrix <- Seurat_RNA@assays$RNA@data[,HSC_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  Seurat_RNA@meta.data[HSC_cells, 'HSC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_GAM_PC.pdf')
+markers <- c('Adamtsl2', 'Podn', 'Spon2', 'Rspo3')
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  Seurat_RNA@meta.data[HSC_cells, 'HSC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#B8B834')
+dev.off()
+```
+```{r}
+# Resolve
+# Ngfr and Adamtsl2
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_pseudotime_markers_500.pdf')
+mat <- dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ]
+rownames(mat)[-which(rownames(mat) %in% markers)] <- ''
+Heatmap(
+   mat,
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 12)
+)
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_qc_order.pdf')
+markers <- c('percent_mito', 'n_counts')
+matrix <- Seurat_RNA@meta.data[HSC_cells,]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(t(matrix[,markers, drop = FALSE]), dpt =  Seurat_RNA@meta.data[HSC_cells, 'HSC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+```
+
+### Same but with regions - Use all
+
+```{r}
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_data.tsv', header=TRUE)
+rownames(cell_data) <- gsub("-1-TEW__043783__Mouse_4_Multiome_10x", "-TEW__043783__523d9c__Multiome_Liver_10xprotocol" ,rownames(cell_data))
+rownames(cell_data) <- gsub("-1-TEW__ebb273__Mouse_5_Multiome_NST","-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", rownames(cell_data))
+HSC_cells <- rownames(cell_data[grep('HSC', cell_data$Refined_cell_type_ATAC),])
+```
+
+
+```{r}
+PRTM <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/PRTM.Rds')
+HSC_cells <- HSC_cells[which(HSC_cells %in% colnames(PRTM))]
+PRTM <- PRTM[,HSC_cells]
+cell_data <- cell_data[HSC_cells,]
+```
+
+```{r}
+# Intersect with topics
+library(GenomicRanges)
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_HSC_c1.0_common_consensus.bed')[,c(1:3)]
+peaks <- unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3]))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_HSC_c1.0_cond1_consensus.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_HSC_c1.0_cond2_consensus.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+```
+
+```{r}
+PRTM <- PRTM[peaks[which(peaks %in% rownames(PRTM))],]  
+```
+
+```{r}
+matrix <- PRTM
+# Plot
+require(gam)
+HSC_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/Pseudotime_df/HSC_RNA.Rds')
+t <- HSC_RNA[HSC_cells,'Pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+
+saveRDS(gam.pval, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_HSC_regions_cond1_RNA_order.RDS')
+```
+
+```{r}
+gam.pval <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_HSC_regions_cond1_RNA_order.RDS')
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)
+library(dplyr)
+topgenes <- topgenes[topgenes<0.05] %>% names()
+length(topgenes)
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = HSC_RNA[HSC_cells,'Pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=400, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_pseudotime_regions_w400_RNA_based.pdf')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/HSC_pseudotime_regions_w400_RNA_based.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+```
+
+### For LSEC
+
+```{r}
+#Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+# Take only LSEC cells and select principal components
+LSEC_cells <- rownames(Seurat_RNA@meta.data[grep('LSEC', Seurat_RNA@meta.data$Refined_cell_type),])
+LSEC <- subset(x = Seurat_RNA, cells = rownames(Seurat_RNA@meta.data[grep('LSEC', Seurat_RNA@meta.data$Refined_cell_type),]), invert = FALSE)
+LSEC_PC <- LSEC@reductions$harmony@cell.embeddings[,1:29] # The number of PCs we know it form a previous analysis
+# Use the corrected principal components to order the cells using diffusion maps
+set.seed(555)
+library(destiny)
+LSEC_DiffussionMap <- DiffusionMap(LSEC_PC)
+LSEC_DPT<- DPT(LSEC_DiffussionMap)
+LSEC_RNA <- data.frame(Cell_type=as.vector(unlist(LSEC@meta.data$Refined_cell_type)), Landmark=rep('CentralVein', length(LSEC_cells)), Pseudotime=rank(LSEC_DPT$dpt), row.names = LSEC_cells)
+# Plot
+library(ggplot2)
+library(ggbeeswarm)
+library(ggthemes)
+ggplot(LSEC_RNA, aes(x = Pseudotime, y = Cell_type, colour = Cell_type)) + geom_quasirandom(groupOnX = FALSE) + scale_color_tableau() + theme_classic() + xlab("Diffusion map pseudotime (dpt)") + ylab("Timepoint") + ggtitle("Cells ordered by diffusion map pseudotime")
+# We can also plot the pseudotime as a check-up in the UMAP
+LSEC_pseudotime <- LSEC_RNA[,'Pseudotime',drop=FALSE]
+colnames(LSEC_pseudotime) <- 'LSEC_pseudotime'
+Seurat_RNA <- AddMetaData(Seurat_RNA, LSEC_pseudotime)
+```
+
+```{r}
+#Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+matrix <- Seurat_RNA@assays$RNA@data[,LSEC_cells]
+# Plot
+require(gam)
+t <- -Seurat_RNA@meta.data[LSEC_cells,'LSEC_pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))[1:5000]  
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+```
+
+```{r}
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)[1:5000] 
+library(dplyr)
+topgenes <- topgenes[topgenes<0.01] %>% names()
+length(topgenes)
+markers <- c('Wnt2', 'Kit', 'Plpp1', 'Lgals1', 'Ntn4', 'Adam23')
+topgenes <- c(topgenes, markers[-which(markers %in% topgenes)])
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- Seurat_RNA@assays$RNA@data[,LSEC_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = -Seurat_RNA@meta.data[LSEC_cells,'LSEC_pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=2000, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSC_v2_roll2000.pdf')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE, 
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE, 
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps')
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_pseudotime_markers.png')
+mat <- dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ]
+rownames(mat)[-which(rownames(mat) %in% markers)] <- ''
+Heatmap(
+   mat,
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 12)
+)
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_GAM_PP.pdf')
+markers <- c('Ntn4', 'Adam23')
+matrix <- Seurat_RNA@assays$RNA@data[,LSEC_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  -Seurat_RNA@meta.data[LSEC_cells, 'LSEC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_GAM_PC.pdf')
+markers <- c('Wnt2', 'Kit', 'Plpp1', 'Lgals1')
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  -Seurat_RNA@meta.data[LSEC_cells, 'LSEC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#B8B834')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_qc_order.pdf')
+markers <- c('percent_mito', 'n_counts')
+matrix <- Seurat_RNA@meta.data[LSEC_cells,]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(t(matrix[,markers, drop = FALSE]), dpt =  Seurat_RNA@meta.data[LSEC_cells, 'LSEC_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+```
+
+### Same but with regions - Use all
+
+```{r}
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_data.tsv', header=TRUE)
+rownames(cell_data) <- gsub("-1-TEW__043783__Mouse_4_Multiome_10x", "-TEW__043783__523d9c__Multiome_Liver_10xprotocol" ,rownames(cell_data))
+rownames(cell_data) <- gsub("-1-TEW__ebb273__Mouse_5_Multiome_NST","-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", rownames(cell_data))
+LSEC_cells <- rownames(cell_data[grep('LSEC', cell_data$Refined_cell_type_ATAC),])
+```
+
+```{r}
+PRTM <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/PRTM.Rds')
+LSEC_cells <- LSEC_cells[which(LSEC_cells %in% colnames(PRTM))]
+PRTM <- PRTM[,LSEC_cells]
+cell_data <- cell_data[LSEC_cells,]
+```
+
+```{r}
+# Intersect with topics
+library(GenomicRanges)
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_LSEC_c1.0_common_consensus.bed')[,c(1:3)]
+peaks <- unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3]))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_LSEC_c1.0_cond1_consensus.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_zonation/MACS_bdgdiff/Zonation_LSEC_c1.0_cond2_consensus.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+```
+
+```{r}
+PRTM <- PRTM[peaks[which(peaks %in% rownames(PRTM))],]  
+```
+
+```{r}
+matrix <- PRTM
+# Plot
+require(gam)
+LSEC_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/Pseudotime_df/LSEC_RNA.Rds')
+t <- -Seurat_RNA@meta.data[LSEC_cells,'LSEC_pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+
+saveRDS(gam.pval, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_LSEC_regions_cond1_RNA_order.RDS')
+```
+
+```{r}
+gam.pval <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_LSEC_regions_cond1_RNA_order.RDS')
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)
+library(dplyr)
+topgenes <- topgenes[topgenes<0.05] %>% names()
+length(topgenes)
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = -LSEC_RNA[LSEC_cells,'Pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=200, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_pseudotime_regions_w200_RNA_based.pdf')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/LSEC_pseudotime_regions_w200_RNA_based.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=FALSE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+```
+
+### For hepatocytes
+
+```{r}
+# Load your Seurat object (you can also use your custom PCs data frame and cell data if not available)
+# I can send you the code I used to generate this one if needed
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+# Take only hepatocyte cells and select (harmony corrected) principal components
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+Hep <- subset(x = Seurat_RNA, cells = rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),]), invert = FALSE)
+Hep_PC <- Hep@reductions$harmony@cell.embeddings[,1:29] # The number of PCs we know it form a previous analysis, it is based on the CV approach
+# Use the corrected principal components to order the cells using diffusion maps
+set.seed(555)
+library(destiny)
+Hep_DiffussionMap <- DiffusionMap(Hep_PC)
+Hep_DPT<- DPT(Hep_DiffussionMap) # This function calculates pseudotime based on diffusion components
+# This is ScoMAP format, not required but it is nice to make the ordered plot (then you see the order of your pseudotime), see below
+# Here we use Hep_DPT$dpt, sometimes dpt is actually noisier; so if not convinced tou can take a look to the diffusion components directly and chek if any represents better the order (e.g. Hep_DPT$DC1)
+Hep_RNA <- data.frame(Cell_type=as.vector(unlist(Hep@meta.data$Refined_cell_type)), Landmark=rep('CentralVein', length(Hep_cells)), Pseudotime=rank(Hep_DPT$dpt), row.names = Hep_cells)
+# Plot to check dpt direction
+library(ggplot2)
+library(ggbeeswarm)
+library(ggthemes)
+ggplot(Hep_RNA, aes(x = Pseudotime, y = Cell_type, colour = Cell_type)) + geom_quasirandom(groupOnX = FALSE) + scale_color_tableau() + theme_classic() + xlab("Diffusion map pseudotime (dpt)") + ylab("Timepoint") + ggtitle("Cells ordered by diffusion map pseudotime")
+# Add pseudotime to Seurat object
+Hep_pseudotime <- Hep_RNA[,'Pseudotime',drop=FALSE]
+colnames(Hep_pseudotime) <- 'Hep_pseudotime'
+Seurat_RNA <- AddMetaData(Seurat_RNA, Hep_pseudotime)
+```
+
+```{r}
+saveRDS(Seurat_RNA, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+```
+
+```{r}
+# Fit GAM
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+matrix <- Seurat_RNA@assays$RNA@data[,Hep_cells]
+# Plot
+require(gam)
+t <- Seurat_RNA$Hep_pseudotime[Hep_cells]
+# Here I called the variable var1K, but actually I ended up using the top 3K variable genes. You can use all genes if you want, it will just take a bit longer to run
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))[0:5000]
+matrix <- matrix[var1K, ] 
+# Fit a GAM using a spline, and get model p-values
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+```
+
+```{r}
+saveRDS(gam.pval, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_hep_5K.RDS')
+```
+
+```{r}
+gam.pval <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_hep_5K.RDS')
+# Adjust p-values with Bonferroni
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)[1:5000] 
+library(dplyr)
+# Select genes
+topgenes <- topgenes[topgenes<0.01] %>% names()
+length(topgenes)
+# Make sure all markers we used for Resolve are in the heatmap
+markers <- c('Glul', 'Cyp2e1', 'Lgr5', 'Axin2', 'Pparg', 'Rdh9', 'Cyp7a1', 'Rhbg', 'Gstm3', 'Avpr1a','Ppara', 'Hal', 'Mfsd2a', 'Gls2', 'Pck1', 'Cdh1', 'Aldh1b1', 'Sds', 'Egfr', 'Cps1')
+topgenes <- c(topgenes, markers[-which(markers %in% topgenes)])
+```
+
+```{r}
+# Make heatmap, we use rollmeans to make it a bit smoother
+library("ComplexHeatmap")
+library("zoo")
+matrix <- Seurat_RNA@assays$RNA@data[,Hep_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = Seurat_RNA@meta.data[Hep_cells,'Hep_pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=5000, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+#Heatmap(
+#   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+#   cluster_rows=FALSE, cluster_columns=FALSE,
+#   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+#)
+```
+
+```{r}
+saveRDS(dat, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/dat_hep_5K.RDS')
+```
+
+```{r}
+# Make heatmap but only showing selected gene names (the ones for Resolve)
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps')
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_markers_5K_5Kroll.png')
+dat <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/dat_hep_5K.RDS')
+mat <- dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ]
+rownames(mat)[-which(rownames(mat) %in% markers)] <- ''
+Heatmap(
+   mat,
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 12)
+)
+dev.off()
+```
+
+```{r}
+dat <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/dat_hep.RDS')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+```
+
+```{r}
+# Plot GAM fitting for some genes
+## Periportal
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_GAM_PP.pdf')
+markers <- c('Sds', 'Hal', 'Gls2','Cps1')
+matrix <- Seurat_RNA@assays$RNA@data[,Hep_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+## Pericentral
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_GAM_PC.pdf')
+markers <- c('Glul', 'Lgr5', 'Cyp2e1', 'Axin2')
+matrix <- Seurat_RNA@assays$RNA@data[,Hep_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#B8B834')
+dev.off()
+## Intermediate
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_GAM_intermediate.pdf')
+markers <- c('Hamp2', 'Igfbp2')
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+matrix <- Seurat_RNA@assays$RNA@data[,Hep_cells]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[markers, , drop = FALSE], dpt =  Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#7CB95F')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_qc_order.pdf')
+markers <- c('percent_mito', 'n_counts')
+matrix <- Seurat_RNA@meta.data[Hep_cells,]
+expr_matrix <- as.data.frame(t(as.matrix(rbind(t(matrix[,markers, drop = FALSE]), dpt =  Seurat_RNA@meta.data[Hep_cells, 'Hep_pseudotime']))))
+library(tidyr)
+library(ggplot2)
+df <- pivot_longer(expr_matrix, markers, names_to = 'feature', values_to = 'expr')
+df$expr <- as.numeric(as.character(df$expr)) 
+df$dpt <- as.numeric(as.character(df$dpt))
+p <- ggplot(df, mapping = aes(x=dpt, y=expr)) + theme_classic() + xlab('Pseudotime') + ylab('Expression (Log CPM)') + theme(plot.title = element_text(size=16, hjust =  0.5, face = 'bold'), strip.text = element_text(size=12, face = 'bold') ,strip.background = element_rect(size = 0)) + guides(color = guide_legend(override.aes = list(linetype = 'blank')))  + facet_wrap(~feature,scales = "free_y") 
+p + geom_smooth(aes(color = expr), method = 'gam', se=F, color = '#6EBA9C')
+dev.off()
+```
+
+### Same but with regions
+
+```{r}
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+Seurat_RNA <- Seurat_RNA[,Hep_cells]
+```
+
+```{r}
+PRTM <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/PRTM.Rds')
+Hep_cells <- Hep_cells[which(Hep_cells %in% colnames(PRTM))]
+PRTM <- PRTM[,Hep_cells]
+Seurat_RNA <- Seurat_RNA[,Hep_cells]
+```
+
+```{r}
+# Intersect with topics
+library(GenomicRanges)
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/General_clean_v4.bed')[,c(1:3)]
+peaks <- unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3]))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Pericentral_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Periportal_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Intermediate_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+```
+
+```{r}
+PRTM <- PRTM[peaks,]  
+```
+
+```{r}
+matrix <- PRTM
+# Plot
+require(gam)
+Hep_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/Pseudotime_df/Hep_RNA_ATAC_based.Rds')
+t <- Seurat_RNA@meta.data[Hep_cells,'Hep_pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))[1:5000]  
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+```
+
+```{r}
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)[1:3000] 
+library(dplyr)
+topgenes <- topgenes[topgenes<0.01] %>% names()
+length(topgenes)
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = Seurat_RNA@meta.data[Hep_cells,'Hep_pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=500, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_regions.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+```
+
+
+### Same but with regions - Use all
+
+```{r}
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_data.tsv', header=TRUE)
+rownames(cell_data) <- gsub("-1-TEW__043783__Mouse_4_Multiome_10x", "-TEW__043783__523d9c__Multiome_Liver_10xprotocol" ,rownames(cell_data))
+rownames(cell_data) <- gsub("-1-TEW__ebb273__Mouse_5_Multiome_NST","-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", rownames(cell_data))
+Hep_cells <- rownames(cell_data[grep('Hep', cell_data$Refined_cell_type_ATAC),])
+```
+
+
+```{r}
+PRTM <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/PRTM.Rds')
+Hep_cells <- Hep_cells[which(Hep_cells %in% colnames(PRTM))]
+PRTM <- PRTM[,Hep_cells]
+cell_data <- cell_data[Hep_cells,]
+```
+
+```{r}
+# Intersect with topics
+library(GenomicRanges)
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/General_clean_v4.bed')[,c(1:3)]
+peaks <- unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3]))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Pericentral_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Periportal_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+
+peaks_f <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Intermediate_clean_v4.bed')[,c(1:3)]
+peaks <- c(peaks,unlist(paste0(peaks_f[,1], ':',peaks_f[,2], '-', peaks_f[,3])))
+```
+
+```{r}
+PRTM <- PRTM[peaks,]  
+```
+
+```{r}
+matrix <- PRTM
+# Plot
+require(gam)
+Hep_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/Pseudotime_df/Hep_RNA.Rds')
+t <- Hep_RNA[Hep_cells,'Pseudotime']
+var1K <- names(sort(apply(matrix, 1, var),decreasing = TRUE))
+matrix <- matrix[var1K, ] 
+# fit a GAM using a spline
+gam.pval <- apply(matrix,1,function(z){
+    d <- data.frame(z=z, t=t)
+    suppressWarnings({
+      tmp <- suppressWarnings(gam(z ~ s(t), data=d))
+    })
+    p <- summary(tmp)[4][[1]][1,5]
+    p
+})
+
+saveRDS(gam.pval, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_hep_regions_all_RNA_order.RDS')
+```
+
+```{r}
+gam.pval <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/gam_pval_hep_regions_all_RNA_order.RDS')
+gam.pval <- p.adjust(gam.pval)
+topgenes <- sort(gam.pval, decreasing = FALSE)
+library(dplyr)
+topgenes <- topgenes[topgenes<0.01] %>% names()
+length(topgenes)
+```
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = Hep_RNA[Hep_cells,'Pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=500, by=1, FUN=mean)
+dat <- t(dat)
+saveRDS(dat, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/dat_hep_regions_all_RNA_based.RDS')
+window <- 5
+step <- 1
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_regions_w500_RNA_based.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+```
+
+```{r}
+cl.rows <- fastcluster::hclust.vector(dat, method="ward", metric="euclidean")
+dd.rows <- as.dendrogram(cl.rows)
+
+k <- 4
+cut_avg <- as.data.frame(as.factor(cutree(cl.rows, k = k)))
+colnames(cut_avg) <- 'Cluster'
+colors <- hue_pal()(k)
+names(colors) <- as.factor(1:k)
+colVars_row <- list()
+colVars_row[['Cluster']] <- colors
+
+annotation_row <- ComplexHeatmap::HeatmapAnnotation(df = cut_avg, col = colVars_row, which='row')
+
+library(circlize)
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_regions_w2000_all_cluster.png')
+heatmap <- ComplexHeatmap::Heatmap(data.matrix(dat), cluster_columns = FALSE, cluster_rows=dd.rows, show_row_dend = FALSE, show_column_names=TRUE, show_row_names = FALSE, right_annotation=annotation_row, name='Standarized accessibility probability', row_names_gp = gpar(fontsize = 5), heatmap_legend_param = list(legend_direction = "horizontal", legend_width = unit(5, "cm"), title_position='topcenter'), column_title_gp = gpar(fontface = 'bold'))
+ComplexHeatmap::draw(heatmap, heatmap_legend_side = "bottom", annotation_legend_side = "right")
+dev.off()
+```
+
+```{r}
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = -Hep_RNA[Hep_cells,'Pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=1000, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_regions_w1000_w7K.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+
+library("ComplexHeatmap")
+library("zoo")
+matrix <- PRTM
+expr_matrix <- as.data.frame(t(as.matrix(rbind(matrix[topgenes, , drop = FALSE], dpt = -Hep_RNA[Hep_cells,'Pseudotime']))))
+dat <- expr_matrix[order(expr_matrix$dpt),]
+dat <- dat[,-which(colnames(dat) == 'dpt')]
+dat <- scale(dat)
+dat <- rollapply(dat, width=2000, by=1, FUN=mean)
+dat <- t(dat)
+window <- 5
+step <- 1
+png('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Hep_pseudotime_regions_w2000_w7K.png')
+Heatmap(
+   dat[order(apply(t(rollapply(t(dat), width=window, by=step, FUN=mean)), 1, which.max)), ],
+   cluster_rows=FALSE, cluster_columns=FALSE,
+   show_row_names=TRUE, show_column_names=FALSE, row_names_gp = gpar(fontsize = 1)
+)
+dev.off()
+```
+
+# Coverage plots
+
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA_1 <- Seurat_RNA
+Seurat_RNA_1 <- Seurat_RNA_1[,which(Seurat_RNA_1$sample_id == 'TEW__043783__Mouse_4_Multiome_10x')]
+Seurat_RNA_1 <- Seurat_RNA_1[,grep('Hep', Seurat_RNA_1$Refined_cell_type)]
+Seurat_RNA_1 <- RenameCells(Seurat_RNA_1 , new.names = gsub('-TEW__043783__523d9c__Multiome_Liver_10xprotocol', '-1', colnames(Seurat_RNA_1)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_1)]
+Seurat_RNA_1[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_1[["ATAC"]]) <- annotation
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA_2 <- Seurat_RNA
+Seurat_RNA_2 <- Seurat_RNA_2[,which(Seurat_RNA_2$sample_id == 'TEW__ebb273__Mouse_5_Multiome_NST')]
+Seurat_RNA_2 <- Seurat_RNA_2[,grep('Hep', Seurat_RNA_2$Refined_cell_type)]
+Seurat_RNA_2 <- RenameCells(Seurat_RNA_2 , new.names = gsub('-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol', '-1', colnames(Seurat_RNA_2)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_2)]
+Seurat_RNA_2[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_2[["ATAC"]]) <- annotation
+```
+
+```{r}
+combined <- merge(
+  x = Seurat_RNA_1,
+  y = Seurat_RNA_2
+)
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/')
+saveRDS(combined, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes.RDS')
+```
+
+```{r}
+combined <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes.RDS')
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+DefaultAssay(combined) <- "ATAC"
+p <- CoveragePlot(combined, region = "chr1-194607028-194624420", features = "Plxna2", group.by = 'Refined_cell_type', peaks=FALSE)
+library(ggplot2)
+p & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a"))
+```
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+DefaultAssay(combined) <- "ATAC"
+p <- CoveragePlot(combined, region = "chr4-49543625-49551144", features = "Aldob", group.by = 'Refined_cell_type', peaks=FALSE)
+library(ggplot2)
+p & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a"))
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Hal.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "Hal", features = "Hal", group.by = 'Refined_cell_type', peaks=FALSE)
+dev.off()
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Cyp2e1.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr7-140718767-140819953", features = "Cyp2e1", group.by = 'Refined_cell_type', peaks=FALSE)
+dev.off()
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Glul.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr1-153860824-153948843", features = "Glul", group.by = 'Refined_cell_type', peaks=FALSE)
+dev.off()
+```
+
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Tbx3.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr5-119620668-119830669", features = "Tbx3", group.by = 'Refined_cell_type', peaks=FALSE)
+dev.off()
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA <- Seurat_RNA[,which(Seurat_RNA$sample_id == 'TEW__043783__Mouse_4_Multiome_10x')]
+Seurat_RNA <- Seurat_RNA[,grep('LSEC', Seurat_RNA$Zonation_refined_cell_type)]
+Seurat_RNA <- RenameCells(Seurat_RNA , new.names = gsub('-TEW__043783__523d9c__Multiome_Liver_10xprotocol', '-1', colnames(Seurat_RNA)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+#fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/atac_fragments.tsv.gz'
+#atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA)]
+Seurat_RNA[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA[["ATAC"]]) <- annotation
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Ntn4.pdf')
+DefaultAssay(Seurat_RNA) <- "ATAC"
+CoveragePlot(Seurat_RNA, region = "Ntn4", features = "Ntn4", group.by = 'Zonation_refined_cell_type', peaks=FALSE)
+dev.off()
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA <- Seurat_RNA[,which(Seurat_RNA$sample_id == 'TEW__ebb273__Mouse_5_Multiome_NST')]
+Seurat_RNA <- Seurat_RNA[,grep('HSC', Seurat_RNA$Zonation_refined_cell_type)]
+Seurat_RNA <- RenameCells(Seurat_RNA , new.names = gsub('-TEW__ebb273__Mouse_5_Multiome_NST', '-1', colnames(Seurat_RNA)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA)]
+Seurat_RNA[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA[["ATAC"]]) <- annotation
+```
+
+```{r}
+dir.create('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Spon2.pdf')
+DefaultAssay(Seurat_RNA) <- "ATAC"
+CoveragePlot(Seurat_RNA, region = "chr5-33212413-33221983", features = "Spon2", group.by = 'Zonation_refined_cell_type', peaks=FALSE)
+dev.off()
+
+#chr5:33212413-33221383
+```
+
+# For LSEC (v2)
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA_1 <- Seurat_RNA
+Seurat_RNA_1 <- Seurat_RNA_1[,which(Seurat_RNA_1$sample_id == 'TEW__043783__Mouse_4_Multiome_10x')]
+Seurat_RNA_1 <- Seurat_RNA_1[,grep('LSEC', Seurat_RNA_1$Refined_cell_type)]
+Seurat_RNA_1 <- RenameCells(Seurat_RNA_1 , new.names = gsub('-TEW__043783__523d9c__Multiome_Liver_10xprotocol', '-1', colnames(Seurat_RNA_1)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_1)]
+Seurat_RNA_1[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_1[["ATAC"]]) <- annotation
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA_2 <- Seurat_RNA
+Seurat_RNA_2 <- Seurat_RNA_2[,which(Seurat_RNA_2$sample_id == 'TEW__ebb273__Mouse_5_Multiome_NST')]
+Seurat_RNA_2 <- Seurat_RNA_2[,grep('LSEC', Seurat_RNA_2$Refined_cell_type)]
+Seurat_RNA_2 <- RenameCells(Seurat_RNA_2 , new.names = gsub('-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol', '-1', colnames(Seurat_RNA_2)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_2)]
+Seurat_RNA_2[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_2[["ATAC"]]) <- annotation
+```
+
+```{r}
+combined <- merge(
+  x = Seurat_RNA_1,
+  y = Seurat_RNA_2
+)
+```
+
+```{r}
+combined@meta.data$Zonation_refined_cell_type <- gsub('LSEC_PP', '1_LSEC_PP',combined@meta.data$Zonation_refined_cell_type)
+combined@meta.data$Zonation_refined_cell_type <- gsub('LSEC_PC', '2_LSEC_PC',combined@meta.data$Zonation_refined_cell_type)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Ntn4_v2.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "Ntn4", features = "Ntn4", group.by = 'Zonation_refined_cell_type', peaks=FALSE, tile.size=1, tile.cells = 1, bigwig='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_mallet/pseudobulk_bw_files/LSEC.bw')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Kit_v2.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr5-75561440-75664736", features = "Kit", group.by = 'Zonation_refined_cell_type', peaks=FALSE, tile.size=1, tile.cells = 1, bigwig='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_mallet/pseudobulk_bw_files/LSEC.bw')
+dev.off()
+```
+
+# For HSC (v2)
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA_1 <- Seurat_RNA
+Seurat_RNA_1 <- Seurat_RNA_1[,which(Seurat_RNA_1$sample_id == 'TEW__043783__Mouse_4_Multiome_10x')]
+Seurat_RNA_1 <- Seurat_RNA_1[,grep('HSC', Seurat_RNA_1$Refined_cell_type)]
+Seurat_RNA_1 <- RenameCells(Seurat_RNA_1 , new.names = gsub('-TEW__043783__523d9c__Multiome_Liver_10xprotocol', '-1', colnames(Seurat_RNA_1)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__043783__523d9c__Multiome_Liver_10xprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_1)]
+Seurat_RNA_1[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_1[["ATAC"]]) <- annotation
+```
+
+```{r}
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+annot <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/NP_zonation/Zonation_refined_cell_type.txt')
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+Seurat_RNA <- AddMetaData(Seurat_RNA, annot)
+Seurat_RNA_2 <- Seurat_RNA
+Seurat_RNA_2 <- Seurat_RNA_2[,which(Seurat_RNA_2$sample_id == 'TEW__ebb273__Mouse_5_Multiome_NST')]
+Seurat_RNA_2 <- Seurat_RNA_2[,grep('HSC', Seurat_RNA_2$Refined_cell_type)]
+Seurat_RNA_2 <- RenameCells(Seurat_RNA_2 , new.names = gsub('-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol', '-1', colnames(Seurat_RNA_2)))
+annotation <- GetGRangesFromEnsDb(ensdb = EnsDb.Mmusculus.v79)
+seqlevelsStyle(annotation) <- "UCSC"
+genome(annotation) <- "mm10"
+# create ATAC assay and add it to the object
+fragpath <- '/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/atac_fragments.tsv.gz'
+atac <- Read10X("/staging/leuven/stg_00002/lcb/lcb_projects/TEW/Multiome/cellranger_arc/mouse_liver/TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol/outs/raw_feature_bc_matrix", gene.column = 1)
+atac_counts <- atac[['Peaks']][,colnames(Seurat_RNA_2)]
+Seurat_RNA_2[["ATAC"]] <- CreateChromatinAssay(
+  counts = atac_counts,
+  sep = c(":", "-"),
+  fragments = fragpath,
+  annotation = annotation,
+  min.features = -1
+)
+Annotation(Seurat_RNA_2[["ATAC"]]) <- annotation
+```
+
+```{r}
+combined <- merge(
+  x = Seurat_RNA_1,
+  y = Seurat_RNA_2
+)
+```
+
+```{r}
+combined@meta.data$Zonation_refined_cell_type <- gsub('HSC_PP', '1_HSC_PP',combined@meta.data$Zonation_refined_cell_type)
+combined@meta.data$Zonation_refined_cell_type <- gsub('HSC_PC', '2_HSC_PC',combined@meta.data$Zonation_refined_cell_type)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Spon2_v2.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr5-33209398-33223584", features = "Spon2", group.by = 'Zonation_refined_cell_type', peaks=FALSE, tile.size=1, tile.cells = 1, bigwig='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_mallet/pseudobulk_bw_files/HSC.bw')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Ngfr_v2.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr11-95564475-95638329", features = "Ngfr", group.by = 'Zonation_refined_cell_type', peaks=FALSE, tile.size=1, tile.cells = 1, bigwig='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_mallet/pseudobulk_bw_files/HSC.bw')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Zonation_heatmaps/Coverage_plots/Kit_v2.pdf')
+DefaultAssay(combined) <- "ATAC"
+CoveragePlot(combined, region = "chr5-75561440-75664736", features = "Kit", group.by = 'Zonation_refined_cell_type', peaks=FALSE, tile.size=1, tile.cells = 1, bigwig='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/consensus_peak_calling_mallet/pseudobulk_bw_files/LSEC.bw')
+dev.off()
+```

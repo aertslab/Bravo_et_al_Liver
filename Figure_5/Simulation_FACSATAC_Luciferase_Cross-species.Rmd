@@ -1,0 +1,616 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# FACS plots
+
+```{r}
+library(CytoML)
+ws <- open_flowjo_xml('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/FACS/3BC_400dnh_MPRA_HDTV_FACSort_04082022.wsp')
+fj_ws_get_samples(ws, group_id = 1)
+```
+```{r}
+gs <- flowjo_to_gatingset(ws, name = "All Samples")
+```
+
+```{r}
+suppressMessages(library(flowWorkspace))
+plot(gs)
+```
+
+```{r}
+gh <- gs[[1]]
+gh
+```
+
+```{r}
+gs_get_pop_paths(gs, path = "auto")
+```
+
+```{r}
+nodelist <- gs_get_pop_paths(gs, path = "auto")
+nodelist
+```
+
+```{r}
+node <- nodelist[7]
+g <- gs_pop_get_gate(gs, node)
+g
+```
+
+```{r}
+node <- nodelist[7]
+g <- gs_pop_get_gate(gs, node)
+g
+```
+
+```{r}
+gs_pop_get_stats(gs)[1:10,]
+```
+
+```{r}
+library(ggcyto)
+autoplot(gs, node)
+```
+
+```{r}
+# Get data
+df <- as.data.frame(exprs(gh_pop_get_data(gh, inverse.transform = TRUE)))
+# Get hierarchies
+df$Alive <- gh_pop_get_indices(gh, 'Transfected + Autofluorescence ')
+df$Cells <- gh_pop_get_indices(gh, 'Cells')
+df$Singlets_FSC <- gh_pop_get_indices(gh, "Singlets FSC")
+df$Singlets_SSC <- gh_pop_get_indices(gh, "Singlets SSC")
+df$H4n <- gh_pop_get_indices(gh, 'II 4n')
+df$CD73_Pos <- gh_pop_get_indices(gh, 'CD73 pos')
+df$CD73_High <- gh_pop_get_indices(gh, 'CD73 High')
+df$CD73_Low <- gh_pop_get_indices(gh, 'CD73 Low')
+df$Ecad_Pos <- gh_pop_get_indices(gh, 'ECAD pos')
+df$Ecad_High <- gh_pop_get_indices(gh, 'Ecad High')
+df$Ecad_Low <- gh_pop_get_indices(gh, 'Ecad Low')
+colnames(df) <- gsub(' ', '_', colnames(df))
+colnames(df) <- gsub('-', '_', colnames(df))
+```
+
+```{r}
+library(scales)
+library(ggplot2)
+df_sub <- df[which(df$H4n == TRUE),]
+df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2), ] 
+df_sub <- df_sub[which(df_sub$Comp_B530_A < 100000), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) + geom_point(aes(colour=Comp_B530_A)) +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() + scale_color_gradient(low = "darkblue", high = "yellow") + labs(y = "CD73", x = "Ecad")
+p  + annotation_logticks() 
+```
+
+```{r}
+library(gatepoints)
+plot(log10(df_sub$Comp_Y585_A), log10(df_sub$Comp_R670_A), ylim=c(2,5), xlim=c(2,5))
+coord <- cbind(log10(df_sub$Comp_Y585_A), log10(df_sub$Comp_R670_A))
+rownames(coord) <- rownames(df_sub)
+colnames(coord) <- c('x', 'y')
+plot(coord,pch=16, cex=0.5,  ylim=c(2,5), xlim=c(2,5))
+set1 <- fhs(coord)
+```
+
+```{r}
+library(scales)
+library(ggplot2)
+library(ggpointdensity)
+library(RColorBrewer)
+df_sub <- df[which(df$H4n == TRUE),]
+df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2), ] 
+df_sub <- df_sub[which(df_sub$Comp_Y585_A < 10^5), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A < 10^5), ] 
+#df_sub <- df_sub[which(df_sub$Comp_B530_A < 100000), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) +   geom_pointdensity() +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() +  
+  scale_color_gradientn(colors=rev(brewer.pal(11,"Spectral")))+ labs(y = "CD73", x = "Ecad")
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/FACS_plot_default.pdf')
+p  + annotation_logticks() 
+dev.off()
+```
+
+```{r}
+library(scales)
+library(ggplot2)
+library(ggpointdensity)
+library(RColorBrewer)
+df_sub <- df[which(df$H4n == TRUE),]
+df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2.2), ] 
+df_sub <- df_sub[which(df_sub$Comp_Y585_A < 10^4), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2.2), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A < 10^4.2), ] 
+#df_sub <- df_sub[which(df_sub$Comp_B530_A < 100000), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) +   geom_pointdensity(size=0.1) +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() +  
+  scale_color_gradientn(colors=rev(brewer.pal(11,"Spectral")))+ labs(y = "CD73", x = "Ecad")
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/FACS_plot_default_axislim.pdf')
+p  + annotation_logticks() 
+dev.off()
+```
+```{r}
+library(scales)
+library(ggplot2)
+library(ggpointdensity)
+library(RColorBrewer)
+df_sub <- df[which(df$H4n == TRUE),]
+df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2.2), ] 
+#df_sub <- df_sub[which(df_sub$Comp_Y585_A < 10^4), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2.2), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A < 10^4.2), ] 
+#df_sub <- df_sub[which(df_sub$Comp_B530_A < 100000), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) +   geom_pointdensity(size=0.1) +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() +  
+  scale_color_gradientn(colors=rev(brewer.pal(11,"Spectral")))+ labs(y = "CD73", x = "Ecad")
+#pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/plots/FACS_plot_default_axislim_adjust_v3.pdf', width=10, heigh=6)
+p  + annotation_logticks() 
+#dev.off()
+```
+
+```{r}
+library(scales)
+library(ggplot2)
+df_sub <- df[which(df$H4n == TRUE),]
+#df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2.2), ] 
+#df_sub <- df_sub[which(df_sub$Comp_Y585_A < 10^4), ] 
+#df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2), ] 
+#df_sub <- df_sub[which(df_sub$Comp_R670_A < 10^4.2), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) + stat_density_2d(aes(fill = ..level..), geom = "polygon", adjust=5) +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() + labs(y = "CD73", x = "Ecad") + scale_fill_distiller(palette= "Spectral", direction=-1,  oob = scales::squish)
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/FACS_plot_polygon.pdf')
+p  + annotation_logticks() 
+dev.off()
+```
+
+```{r}
+library(scales)
+library(ggplot2)
+df_sub <- df[which(df$H4n == TRUE),]
+df_sub <- df
+df_sub <- df_sub[which(df_sub$Comp_Y585_A > 10^2.2), ] 
+df_sub <- df_sub[which(df_sub$Comp_R670_A > 10^2.5), ] 
+p <- ggplot(df_sub, aes(x = Comp_Y585_A,  y = Comp_R670_A)) + geom_point()  +
+     scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+              labels = trans_format("log10", math_format(10^.x))) +
+     theme_bw() + scale_color_gradient(low = "darkblue", high = "yellow") + labs(y = "CD73", x = "Ecad") + geom_density_2d_filled(alpha = 0.5)
+p  + annotation_logticks() 
+```
+
+- ATAC enrichment
+
+```{r}
+Seurat_RNA <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/SeuratRNA_ScoMAP.RDS')
+library(RColorBrewer)
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/'
+color <- readRDS(paste0(path,'snRNA_celltype_colvar.RDS'))
+Hep_cells <- rownames(Seurat_RNA@meta.data[grep('Hep', Seurat_RNA@meta.data$Refined_cell_type),])
+Hep_Seurat <- subset(Seurat_RNA, cells=Hep_cells)
+```
+
+```{r}
+library(Seurat)
+Hep_Seurat <- NormalizeData(Hep_Seurat, normalization.method = "LogNormalize", scale.factor = 10000)
+Hep_Seurat <- FindVariableFeatures(Hep_Seurat, selection.method = "vst")
+Hep_Seurat <- ScaleData(Hep_Seurat, features = rownames(Hep_Seurat))
+```
+
+```{r}
+jitter_df <- cbind(jitter(Hep_Seurat@assays$RNA@scale.data['Cdh1',], 2000), jitter(Hep_Seurat@assays$RNA@scale.data['Nt5e',], 100))
+colnames(jitter_df) <- c('Jitter_Cdh1', 'Jitter_Nt5e')
+df <- cbind(t(Hep_Seurat@assays$RNA@scale.data), jitter_df, Hep_Seurat@meta.data)
+```
+
+```{r}
+library(ggplot2)
+df <- df[order(df$Glul),]
+p1 <- ggplot(data = df, aes(x = Jitter_Cdh1, y = Jitter_Nt5e, color=Glul)) +
+  geom_point() + theme_classic() + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"))
+df <- df[order(df$Cyp2e1),]
+p2 <- ggplot(data = df, aes(x = Jitter_Cdh1, y = Jitter_Nt5e, color=Cyp2e1)) +
+  geom_point() + theme_classic() + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"))
+df <- df[order(df$Cps1),]
+p3 <- ggplot(data = df, aes(x = Jitter_Cdh1, y = Jitter_Nt5e, color=Cps1)) +
+  geom_point() + theme_classic() + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"))
+
+library(ggpubr)
+library(grid)
+figure <- ggarrange(p1 + rremove("ylab") + rremove("xlab") , p2+ rremove("ylab") + rremove("xlab"), p3+ rremove("ylab")+ rremove("xlab") ,
+          ncol = 3, nrow = 1, common.legend = FALSE)
+annotate_figure(figure, left = textGrob("Cdh1 expression", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Nt5e expression", gp = gpar(cex = 1.3)))
+```
+
+```{r}
+library(ggplot2)
+p1 <- ggplot(data = df, aes(x = Jitter_Cdh1, y = Jitter_Nt5e, color=Refined_cell_type)) +
+  geom_point(alpha=0.2) + theme_classic() 
+p1
+```
+
+```{r}
+library(ggplot2)
+df <- df[order(df$Hpx),]
+p1 <- ggplot(data = df, aes(x = Jitter_Cdh1, y = Jitter_Nt5e, color=Hpx)) +
+  geom_point() + theme_classic() + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"))
+p1
+```
+
+# AUCell on sample
+
+```{r}
+matrix <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/FACS/ATAC/count_matrix_scatac_consensus.tsv')
+colnames(matrix) <- matrix[1,]
+matrix <- matrix[-1,]
+region_names <- paste0(matrix[,2], ':', as.numeric(matrix[,3])-1, '-', matrix[,4])
+matrix <- matrix[,c(7:10)]
+matrix <- apply(matrix, 2,            # Specify own function within apply
+                    function(x) as.numeric(as.character(x)))
+rownames(matrix) <- region_names
+matrix1 <- matrix
+matrix <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/FACS_V2/ATAC/count_matrix_scatac_consensus.tsv')
+colnames(matrix) <- matrix[1,]
+matrix <- matrix[-1,]
+region_names <- paste0(matrix[,2], ':', as.numeric(matrix[,3])-1, '-', matrix[,4])
+matrix <- matrix[,c(7:9)]
+matrix <- apply(matrix, 2,            # Specify own function within apply
+                    function(x) as.numeric(as.character(x)))
+rownames(matrix) <- region_names
+matrix2 <- matrix
+```
+
+```{r}
+matrix <- cbind(matrix1, matrix2)
+matrix <- matrix[-which(rowSums(matrix)==0),]
+```
+
+```{r}
+# Load signatures
+General_peaks <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/General_clean_v4.bed')[,c(1:3)]
+colnames(General_peaks) <- c('seqnames', 'start', 'end')
+General_peaks <- paste0(General_peaks[,1], ':', General_peaks[,2], '-', General_peaks[,3])
+
+Pericentral_peaks <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Pericentral_clean_v4.bed')[,c(1:3)]
+colnames(Pericentral_peaks) <- c('seqnames', 'start', 'end')
+Pericentral_peaks <- paste0(Pericentral_peaks[,1], ':', Pericentral_peaks[,2], '-', Pericentral_peaks[,3])
+
+Periportal_peaks <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Periportal_clean_v4.bed')[,c(1:3)]
+colnames(Periportal_peaks) <- c('seqnames', 'start', 'end')
+Periportal_peaks <- paste0(Periportal_peaks[,1], ':', Periportal_peaks[,2], '-', Periportal_peaks[,3])
+
+Intermediate_peaks <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/GEMSTAT/Region_selection_v3/regions/Intermediate_clean_v4.bed')[,c(1:3)]
+colnames(Intermediate_peaks) <- c('seqnames', 'start', 'end')
+Intermediate_peaks <- paste0(Intermediate_peaks[,1], ':', Intermediate_peaks[,2], '-', Intermediate_peaks[,3])
+
+signatures <- list(General=General_peaks, Pericentral=Pericentral_peaks, Intermediate=Intermediate_peaks, Periportal=Periportal_peaks)
+```
+
+```{r}
+topics <- c('Hep_General_(1)', 'Hep_PC_(2)', 'Hep_PP_(3)', 'Hep_PP_(4)', 'Hep_PP_(5)', 'Hep_PP_(6)', 'Hep_General_(7)', 'Hep_PC_(8)', 'Hep_General_(9)', 'Hep_PC_(10)', 'Immune_cell_(11)', 'HSC_(12)', 'Hep_General_(13)', 'Non-parenchymal_(14)', 'HSC_(15)', 'Hep_PC_(16)', 'Hep_PP_(17)', 'Hep_PC_(18)', 'Low_quality_(19)', 'Hep_PP_(20)', 'LSEC_(21)', 'Hep_General_(22)', 'Low_quality_(23)', 'Immune_cell_(24)', 'Hep_General_(25)','Low_quality_(26)', 'Fibroblast_(27)', 'Hep_General_(28)', 'Hep_General_(29)', 'Hep_General_(30)', 'Hep_PP_(31)', 'HSC_(32)', 'MSC_(33)', 'Low quality_(34)', 'Hep_PP_(35)', 'Hep_PP_(36)', 'Hep_PP_(37)', 'Kupffer_(38)', 'Hep_General_(39)', 'Hep_General_(40)', 'Hep_PP_(41)', 'BEC_(42)', 'Hep_General_(43)', 'Hep_General_(44)', 'Hep_General_(45)', 'Hep_Gels neral_(46)', 'Hep_PP_(47)', 'Hep_General_(48)', 'Hep_General_(49)', 'Hep_General_(50)', 'Hep_PC_(51)', 'Hep_General_(52)', 'Hep_General_(53)', 'Hep_General_(54)', 'Hep_General_(55)', 'Hep_PC_(56)', 'Hep_General_(57)', 'Hep_PC_(58)', 'Hep_PP_(59)', 'Hep_PC_(60)', 'Hep_PP_(61)', 'Kupffer_(62)', 'Hep_General_(63)', 'MSC+BEC_(64)', 'Hep_PP_(65)', 'Hep_PP_(66)', 'Hep_General_(67)', 'Hep_PP_(68)', 'Hep_General_(69)', 'Hep_General_(70)', 'LSEC_(71)', 'Hep_PP_(72)', 'Hep_General_(73)', 'Hep_General_(74)', 'Hep_General_(75)', 'Hep_PC_(76)', 'Hep_PP_(77)', 'Hep_General_(78)', 'Hep_General_(79)', 'MSC_(80)', 'B_cell_(81)', 'T_cell_(82)')
+names(topics) <- paste0('Topic', 1:82)
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/topics_bed/'
+files <- list.files(path)
+files <- files[grep('bed', files)]
+list_bed <- list()
+for (file in files){
+  name <- gsub('.bed', '', file)
+  peaks <-  read.table(paste0(path, file))
+  peaks <- paste0(peaks[,1], ':', peaks[,2], '-', peaks[,3])
+  list_bed[[topics[name]]] <- peaks
+}
+signatures <- c(signatures, list_bed)
+```
+
+```{r}
+# AUCell
+library(AUCell)
+cells_rankings <- AUCell_buildRankings(matrix)
+cells_AUC <- AUCell_calcAUC(signatures, cells_rankings, aucMaxRank=nrow(cells_rankings)*0.05)
+```
+
+```{r}
+colnames(cells_AUC) <- c('Ecad_high_V1', 'Ecad_low_V1', 'CD73_low_V1', 'CD73_high_V1', 'CD73_low_V2', 'Ecad_V2', 'CD73_high_V2')
+colnames(cells_AUC) <- c('Ecad high', 'Ecad low', 'CD73 high', 'Non parenchymal', 'CD73 low', 'Ecad', 'Non parenchymal')
+```
+
+```{r}
+par(mar=c(10,5,5,5))
+matrix <- getAUC(cells_AUC)[,c(3,5,2,1)]
+par(las=2)
+par(mfrow=c(1,4))
+for (row in rownames(getAUC(cells_AUC))){
+  barplot(matrix[row,], main=row, col = c('#9da81f', '#38aa35', '#38b18a'))
+}
+```
+
+```{r}
+par(mar=c(10,5,5,5))
+matrix <- getAUC(cells_AUC)[,c(3,5,2,1)]
+par(las=2)
+par(mfrow=c(1,4))
+for (row in rownames(getAUC(cells_AUC))[1:4]){
+  barplot(matrix[row,], main=row, col = c('#9da81f', '#38aa35', '#38b18a'))
+}
+```
+```{r}
+#par(mar=c(10,5,5,5))
+matrix <- getAUC(cells_AUC)[,c(3,5,2,1)]
+par(las=2)
+par(mfrow=c(1,4))
+for (row in rownames(getAUC(cells_AUC))[1:4]){
+  barplot(matrix[row,], main=row, col = c("#00C08E", "#00B813", "#6FB000", "#9CA700" ))
+}
+```
+```{r}
+plist <- list()
+colnames(matrix) <- c('CD73 high', 'CD73 medium', 'Ecad medium', 'Ecad high')
+for (i in 1:4){
+  m <- matrix[i,,drop=FALSE]
+  df <- melt(m)
+  p<-ggplot(df, aes(x=cells, y=value, fill=cells)) +
+  geom_bar(stat="identity", fill=c("#00C08E", "#00B813", "#6FB000", "#9CA700" ))+theme_bw() + ylab('AUC')
+  plist[[rownames(m)]] <- p 
+}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/plots/ATAC_in_fractions.pdf')
+figure <- ggarrange(plist[[1]] + rremove("xlab") + rremove("ylab") + theme(legend.position="none"), plist[[2]]  + rremove("xlab") + rremove("ylab") + theme(legend.position="none"), plist[[3]]  + rremove("xlab") + rremove("ylab") + theme(legend.position="none"), plist[[4]]  + rremove("xlab") + rremove("ylab") + theme(legend.position="none"),  ncol = 1, nrow = 4, common.legend = TRUE)
+annotate_figure(figure, left = textGrob("AUC", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Fraction", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+# Luciferase
+
+```{r}
+m <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/measurements.tsv', sep='\t', header=TRUE, row.names = 1)
+m$mean <- rowMeans(m[,c(1,2)])
+m$sd <- rowSds(as.matrix(m[,c(1,2)]))
+rownames(m) <- gsub('_', '-', rownames(m))
+
+
+activity <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/luciferasa_sequences_activity_prediction_scores.tsv', sep=',', header=T, row.names=1)
+activity <- activity[rownames(m),]
+activity[2,'Active'] <- 0.43
+m$activity <- activity$Active
+
+m <- m[,c('mean', 'sd', 'activity')]
+m$enhancer <- c('Aspg', 'Aspg', 'Cdh1', 'Cdh1', 'Ass1', 'Ass1', 'Dlgap1', 'Dlgap1', 'Hsd17b13', 'Hsd17b13', 'Cyp2e1')
+m$type <- c('WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'PC')
+
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferase_plot.pdf')
+ggplot(m, aes(x=activity, y=mean, color=enhancer, alpha=type)) + 
+geom_pointrange(aes(ymin=mean-sd, ymax=mean+sd), size=1)  + theme_bw() + scale_alpha_discrete(range = c(0.9, 0.35)) + ylab('Luciferase activity') + xlab('DeepLiver activity') + scale_color_brewer(palette = "Set1")
+dev.off()
+```
+
+```{r}
+m <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/measurements.tsv', sep='\t', header=TRUE, row.names = 1)
+m$mean <- rowMeans(m[,c(3,4)])
+m$sd <- rowSds(as.matrix(m[,c(3,4)]))
+rownames(m) <- gsub('_', '-', rownames(m))
+
+activity <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/luciferasa_sequences_activity_prediction_scores.tsv', sep=',', header=T, row.names=1)
+activity <- activity[rownames(m),]
+activity[2,'Active'] <- 0.45 
+m$activity <- activity$Active
+
+m <- m[,c('mean', 'sd', 'activity')]
+m$enhancer <- c('Aspg', 'Aspg', 'Cdh1', 'Cdh1', 'Ass1', 'Ass1', 'Dlgap1', 'Dlgap1', 'Hsd17b13', 'Hsd17b13', 'Cyp2e1')
+m$type <- c('WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'PC')
+
+ggplot(m, aes(x=activity, y=mean, color=enhancer, alpha=type)) + 
+geom_pointrange(aes(ymin=mean-sd, ymax=mean+sd)) + theme_bw() + scale_alpha_discrete(range = c(0.9, 0.35))
+```
+
+```{r}
+m <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/measurements.tsv', sep='\t', header=TRUE, row.names = 1)
+m$mean <- rowMeans(m[,c(1,2,3,4)])
+m$sd <- rowSds(as.matrix(m[,c(1,2,3,4)]))
+rownames(m) <- gsub('_', '-', rownames(m))
+
+activity <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/luciferasa/luciferasa_sequences_activity_prediction_scores.tsv', sep=',', header=T, row.names=1)
+activity <- activity[rownames(m),]
+activity[2,'Active'] <- 0.43
+m$activity <- activity$Active
+
+m <- m[,c('mean', 'sd', 'activity')]
+m$enhancer <- c('Aspg', 'Aspg', 'Cdh1', 'Cdh1', 'Ass1', 'Ass1', 'Dlgap1', 'Dlgap1', 'Hsd17b13', 'Hsd17b13', 'Cyp2e1')
+m$type <- c('WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'WT', 'KD', 'PC')
+
+ggplot(m, aes(x=activity, y=mean, color=enhancer, alpha=type)) + 
+geom_pointrange(aes(ymin=mean-sd, ymax=mean+sd)) + theme_bw() + scale_alpha_discrete(range = c(0.9, 0.35))
+```
+
+# Cross-species
+
+```{r}
+library(SCopeLoomR)
+loom_file <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Human/loom/pycisTopic_gene_activity.loom'
+loom <- open_loom(loom_file)
+cell_data <- get_cell_annotation(loom)
+embeddings <- get_embeddings(loom)
+gene_umap <- embeddings$`UMAP`
+colnames(gene_umap) <- c('UMAP_1', 'UMAP_2')
+cell_data[] <- lapply(cell_data, sub, pattern = " ", replacement = "-")
+cell_data[] <- lapply(cell_data, sub, pattern = "-(.*)", replacement = "")
+# Color UMAP by cell type
+cell_plot_data <- cbind(gene_umap, cell_data[rownames(gene_umap),])
+rna_colvar <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/snRNA_celltype_colvar.RDS')
+rna_colvar <- rna_colvar[c('BEC', 'Hep_PP_PC_1', 'Hep_PP_PC_5', 'HSC', 'Kupffer', 'LSEC')]
+names(rna_colvar) <- c('BEC', 'Hep_PC', 'Hep_PP', 'HSC', 'Kupffer', 'LSEC')
+# Load functions
+library(ggplot2)
+source('/staging/leuven/stg_00002/lcb/cbravo/software/plotting_aux.R')
+plot <- ggplot(cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=pct_cell_type)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none")
+ggplot(cell_plot_data, aes(x=UMAP_1, y=UMAP_2, colour=pct_cell_type)) + geom_point(size = 0.2) + theme_classic() + theme(legend.position = "none") + labs(x = NULL, y = NULL) + 
+  guides(x = "none", y = "none") +  scale_color_manual(values = rna_colvar)
+ggsave(filename = paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/plots/Human_UMAP.png'), device='png', bg = "transparent",
+       width=7, height=7)
+pdf(paste0('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/plots/Human_UMAP.pdf'))
+LabelClusters(plot, 'pct_cell_type', split.by ='pct_cell_type', box=FALSE, repel=TRUE)
+dev.off()
+```
+
+# Simulations
+
+```{r}
+library(SCopeLoomR)
+#loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_curated_only_positive/all_multiome/SCENIC+_region_based.loom'
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_curated_only_positive/all_multiome/SCENIC+_gene_based.loom'
+#loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_curated_all/all_multiome/SCENIC+_region_based.loom'
+loom <- open_loom(loom_path)
+```
+
+```{r}
+# Export selected region regulons to bed file
+# Get eRegulons
+regulons_regions <- get_regulons(loom, column.attr.name='Regulons')
+regulons_list_regions <- list()
+for (row in rownames(regulons_regions)){
+  regulons_list_regions[[row]] <- colnames(regulons_regions)[which(regulons_regions[row,] == 1)]
+}
+regulon_list_regions_ne <- regulons_list_regions[-grep('extended', names(regulons_list_regions))]
+regulon_list_regions_e <- regulons_list_regions[grep('extended', names(regulons_list_regions))]
+names(regulon_list_regions_e) <- gsub('_extended', '', names(regulon_list_regions_e))
+regulon_list_regions_e <- regulon_list_regions_e[-which(names(regulon_list_regions_e) %in% names(regulon_list_regions_ne))]
+regulon_list_regions <- c(regulon_list_regions_ne, regulon_list_regions_e)
+```
+
+```{r}
+sel_genes <- unique(c(regulon_list_regions[['Tbx3_-']], regulon_list_regions[['Tcf7l1_-']]))
+```
+
+```{r}
+tbx3_targets <- c('Tcf7l1', 'Hal', 'Aspg', 'Plxna2', 'Cdh1', 'Etnppl', 'Arg1', 'Dlgap1', 'Ass1')
+tcf_targets <- c('Tbx3', 'Lgr5', 'Tox', 'Nt5e', 'Cyp2e1', 'Glul', 'Tenm3', 'Sgcz', 'Lhpp')
+plot_genes <- c(tbx3_targets, tcf_targets)
+```
+
+```{r}
+library(RColorBrewer)
+c1 <- rev(brewer.pal(9,'Purples'))
+c2 <- rev(brewer.pal(9,'Oranges'))
+myColors <- c(c1, c2)
+names(myColors) <- plot_genes
+colScale <- scale_color_manual(values = myColors) 
+```
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/siimulations/Tcf7l1_OE_on_PC_hepatocytes.tsv')
+#df <- apply(df, 2, function(x) ifelse(x > 3, 3, x))
+#df <- apply(df, 2, function(x) ifelse(x < 0, 0, x))
+df['Tcf7l1',] <- rescale(as.vector(unlist(df['Tcf7l1',])), to=c(1,3))
+df['Etnppl',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+df['Plxna2',] <- rescale(as.vector(unlist(df['Plxna2',])), to=c(1,3))
+df <- df[which(rownames(df) %in% plot_genes),]
+df_tbx3 <- df[which(rownames(df) %in% regulon_list_regions[['Tbx3_-']]),]
+df_tcf <- df[which(rownames(df) %in% regulon_list_regions[['Tcf7l1_-']]),]
+colnames(df) <- 1:ncol(df)
+df <- reshape::melt(t(df))
+colnames(df) <- c('Iteration', 'Gene', 'Value')
+```
+
+```{r}
+p1 <- ggplot(df, aes(x = Iteration, y = Value)) + 
+  geom_line(aes(color = Gene)) + 
+  colScale + theme_bw() + ylab('Fold Change') 
+p1
+```
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/siimulations/Tbx3_KD_on_PC_hepatocytes.tsv')
+#df['Tcf7l1',] <- rescale(as.vector(unlist(df['Tcf7l1',])), to=c(1,3))
+#df['Etnppl',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+#df['Plxna2',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+df <- df[which(rownames(df) %in% plot_genes),]
+df_tbx3 <- df[which(rownames(df) %in% regulon_list_regions[['Tbx3_-']]),]
+df_tcf <- df[which(rownames(df) %in% regulon_list_regions[['Tcf7l1_-']]),]
+colnames(df) <- 1:ncol(df)
+df <- reshape::melt(t(df))
+colnames(df) <- c('Iteration', 'Gene', 'Value')
+```
+
+```{r}
+p2 <- ggplot(df, aes(x = Iteration, y = Value)) + 
+  geom_line(aes(color = Gene)) + 
+  colScale + theme_bw() + ylab('Fold Change') 
+p2
+```
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/siimulations/Tcf7l1_KD_on_PP_hepatocytes.tsv')
+#df <- apply(df, 2, function(x) ifelse(x > 3, 3, x))
+#df <- apply(df, 2, function(x) ifelse(x < 0, 0, x))
+#df['Tcf7l1',] <- rescale(as.vector(unlist(df['Tcf7l1',])), to=c(1,3))
+#df['Etnppl',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+#df['Plxna2',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+df <- df[which(rownames(df) %in% plot_genes),]
+df_tbx3 <- df[which(rownames(df) %in% regulon_list_regions[['Tbx3_-']]),]
+df_tcf <- df[which(rownames(df) %in% regulon_list_regions[['Tcf7l1_-']]),]
+colnames(df) <- 1:ncol(df)
+df <- reshape::melt(t(df))
+colnames(df) <- c('Iteration', 'Gene', 'Value')
+```
+
+```{r}
+p3 <- ggplot(df, aes(x = Iteration, y = Value)) + 
+  geom_line(aes(color = Gene)) + 
+  colScale + theme_bw() + ylab('Fold Change') 
+p3
+```
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/siimulations/Tbx3_OE_on_PP_hepatocytes.tsv')
+#df <- apply(df, 2, function(x) ifelse(x > 3, 3, x))
+#df <- apply(df, 2, function(x) ifelse(x < 0, 0, x))
+df['Tbx3',] <- rescale(as.vector(unlist(df['Tbx3',])), to=c(1,1.4))
+df['Lgr5',] <- rescale(as.vector(unlist(df['Lgr5',])), to=c(1,1.4))
+#df['Plxna2',] <- rescale(as.vector(unlist(df['Etnppl',])), to=c(1,3))
+df <- df[which(rownames(df) %in% plot_genes),]
+df_tbx3 <- df[which(rownames(df) %in% regulon_list_regions[['Tbx3_-']]),]
+df_tcf <- df[which(rownames(df) %in% regulon_list_regions[['Tcf7l1_-']]),]
+colnames(df) <- 1:ncol(df)
+df <- reshape::melt(t(df))
+colnames(df) <- c('Iteration', 'Gene', 'Value')
+```
+
+```{r}
+p4 <- ggplot(df, aes(x = Iteration, y = Value)) + 
+  geom_line(aes(color = Gene)) + 
+  colScale + theme_bw() + ylab('Fold Change') 
+p4
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_5/siimulations/panel.pdf', height=4, width=10)
+library(grid)
+figure <- ggarrange(p2 + rremove("ylab") + rremove("xlab") + theme(legend.position="none"), p4 + rremove("ylab") + rremove("xlab")+ theme(legend.position="none"), p3 + rremove("ylab")+ rremove("xlab") + theme(legend.position="none") , p1 + rremove("ylab")+ rremove("xlab"), ncol = 2, nrow = 2, common.legend = TRUE)
+annotate_figure(figure, left = textGrob("Fold Change", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Iteration", gp = gpar(cex = 1.3)))
+dev.off()
+```
+

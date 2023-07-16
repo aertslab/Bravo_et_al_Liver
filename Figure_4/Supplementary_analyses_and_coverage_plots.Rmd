@@ -1,0 +1,1201 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# DL model stats
+
+```{r}
+# Load data
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/Model_stas/'
+dl_stats <- list()
+dl_stats[['Topics']] <- list()
+dl_stats[['Activity']] <- list()
+dl_stats[['Zonation']] <- list()
+
+loss <- read.table(paste0(path, 'loss_all_models.csv'), sep=',')[,2]
+valloss <- read.table(paste0(path, 'valloss_all_models.csv'), sep=',')[,2]
+df <- cbind(loss, valloss)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Topics']][['Loss']] <- df
+
+acc <- read.table(paste0(path, 'accuracy_all_models.csv'), sep=',')[,2]
+valacc <- read.table(paste0(path, 'valacc_all_models.csv'), sep=',')[,2]
+df <- cbind(acc, valacc)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Topics']][['Accuracy']] <- df
+
+loss <- read.table(paste0(path, 'loss_act.csv'), sep=',')[,2]
+valloss <- read.table(paste0(path, 'valloss_act.csv'), sep=',')[,2]
+df <- cbind(loss, valloss)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Activity']][['Loss']] <- df
+
+acc <- read.table(paste0(path, 'acc_act.csv'), sep=',')[,2]
+valacc <- read.table(paste0(path, 'valacc_act.csv'), sep=',')[,2]
+df <- cbind(acc, valacc)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Activity']][['Accuracy']] <- df
+
+loss <- read.table(paste0(path, 'loss_zon.csv'), sep=',')[,2]
+valloss <- read.table(paste0(path, 'valloss_zon.csv'), sep=',')[,2]
+df <- cbind(loss, valloss)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Zonation']][['Loss']] <- df
+
+acc <- read.table(paste0(path, 'acc_zon.csv'), sep=',')[,2]
+valacc <- read.table(paste0(path, 'valacc_zon.csv'), sep=',')[,2]
+df <- cbind(acc, valacc)
+df <- df[-1,]
+df <- apply(df, 2, as.numeric)
+df <- as.data.frame(df)
+df$epoch <- 1:nrow(df)
+dl_stats[['Zonation']][['Accuracy']] <- df
+```
+
+```{r}
+p1 <- ggplot() + 
+  geom_line(data = dl_stats[['Topics']][['Loss']], aes(x = epoch, y = loss), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Topics']][['Loss']], aes(x = epoch, y = valloss), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Loss') + theme_classic() + geom_vline(xintercept = 12, linetype="dotted",  color = "black", size=1.5)
+
+p2 <- ggplot() + 
+  geom_line(data = dl_stats[['Topics']][['Accuracy']], aes(x = epoch, y = acc), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Topics']][['Accuracy']], aes(x = epoch, y = valacc), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Accuracy') + theme_classic() + geom_vline(xintercept = 12, linetype="dotted",  color = "black", size=1.5)
+
+p3 <- ggplot() + 
+  geom_line(data = dl_stats[['Zonation']][['Loss']], aes(x = epoch, y = loss), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Zonation']][['Loss']], aes(x = epoch, y = valloss), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Loss') + theme_classic() + geom_vline(xintercept = 66, linetype="dotted",  color = "black", size=1.5)
+
+p4 <- ggplot() + 
+  geom_line(data = dl_stats[['Zonation']][['Accuracy']], aes(x = epoch, y = acc), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Zonation']][['Accuracy']], aes(x = epoch, y = valacc), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Accuracy') + theme_classic() + geom_vline(xintercept = 66, linetype="dotted",  color = "black", size=1.5)
+
+p5 <- ggplot() + 
+  geom_line(data = dl_stats[['Activity']][['Loss']], aes(x = epoch, y = loss), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Activity']][['Loss']], aes(x = epoch, y = valloss), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Loss') + theme_classic() + geom_vline(xintercept = 122, linetype="dotted",  color = "black", size=1.5)
+
+p6 <- ggplot() + 
+  geom_line(data = dl_stats[['Activity']][['Accuracy']], aes(x = epoch, y = acc), color = "dodgerblue") +
+  geom_line(data = dl_stats[['Activity']][['Accuracy']], aes(x = epoch, y = valacc), color = "brown1") +
+  xlab('Epoch') +
+  ylab('Accuracy') + theme_classic() + geom_vline(xintercept = 122, linetype="dotted",  color = "black", size=1.5)
+
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+print(p5)
+print(p6)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/model_selection.pdf', width=8, height=4)
+library(ggpubr)
+ggarrange(p1,p3,p5,p2,p4,p6, 
+          ncol = 3, nrow = 2)
+dev.off()
+```
+
+# DL predicitons per topic
+
+```{r}
+topics <- c('Low_quality (1)', 'snATAC_Mouse-6 (2)', 'Low_quality (3)', 'snATAC_Mouse-6 (4)', 'MO-NST (5)', 'Hep_General (6)', 'Low_quality (7)', 'Hep_PC (8)', 'snATAC_Mouse-6 (9)', 'Low_quality (10)', 'Immune_cell (11)', 'HSC (12)', 'Low_quality (13)', 'General (14)', 'HSC (15)', 'Hep_PC (16)', 'ZT00-06_PP (17)', 'MO-10x (18)', 'Low_quality (19)', 'Low_quality (20)', 'LSEC (21)', 'Low_quality (22)', 'Low_quality (23)', 'DC (24)', 'MO-NST (25)','Low_quality (26)', 'Fibroblast (27)', 'MO-10x (28)', 'Low_quality (29)', 'MO-10x (30)', 'Low_quality (31)', 'HSC (32)', 'MSC (33)', 'Low_quality (34)', 'Low_quality (35)', 'Low_quality (36)', 'Hep_General (37)', 'Kupffer (38)', 'Low_quality (39)', 'Low_quality (40)', 'snATAC_Mouse-7 (41)', 'BEC (42)', 'Hep_General (43)', 'MO-NST (44)', 'Low_quality (45)', 'Low_quality (46)', 'Low_quality (47)', 'Hep_General (48)', 'Low_quality (49)', 'ZT12 (50)', 'snATAC_Mouse-6 (51)', 'Low_quality (52)', 'Low_quality (53)', 'Low_quality (54)', 'Low_quality (55)', 'ZT00-06_PC (56)', 'snATAC_Mouse-6 (57)', 'Hep_PC (58)', 'snATAC_Mouse-7 (59)', 'Hep_PC (60)', 'MO-10x (61)', 'Kupffer (62)', 'Low_quality (63)', 'MSC+BEC (64)', 'Low_quality (65)', 'Hep_PP (66)', 'Low_quality (67)', 'snATAC_Mouse-6 (68)', 'Low_quality (69)', 'snATAC_Mouse-6 (70)', 'LSEC (71)', 'Low_quality (72)', 'Low_quality (73)', 'Low_quality (74)', 'ZT12 (75)', 'Hep_PC (76)', 'Low_quality (77)', 'Low_quality (78)', 'Low_quality (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+pred <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/liver_motifs_all_topics_500/roc_pr_dict.txt')
+rownames(pred) <- pred[,1]
+pred <- pred[,-1]
+colnames(pred) <- topics
+use <- unique(topics[c(grep('Hep_General', topics), grep('Hep_PP', topics), grep('Hep_PC', topics),  grep('Non-par', topics), grep('Kupffer', topics),  grep('Kupffer', topics), grep('Immune_cell', topics), grep('B_cell', topics), grep('T_cell', topics), grep('LSEC', topics), grep('VEC', topics), grep('HSC', topics), grep('Fibroblast', topics), grep('BEC', topics),grep('MSC', topics), grep('ZT00-06', topics), grep('ZT12', topics), grep('snATAC_Mouse-6', topics), grep('snATAC_Mouse-7', topics), grep('MO-10x', topics), grep('MO-NST', topics), grep('Low', topics))])
+pred <- pred[,use]
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/ROC_all_topics.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'ROC_test'),] 
+x2 <- x[which(x$Set == 'ROC_shuffle'),] 
+x3 <- x[which(x$Set == 'ROC_train'),] 
+x4 <- x[which(x$Set == 'ROC_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('ROC')
+dev.off()
+```
+
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/PR_all_topics.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'PR_test'),] 
+x2 <- x[which(x$Set == 'PR_shuffle'),] 
+x3 <- x[which(x$Set == 'PR_train'),] 
+x4 <- x[which(x$Set == 'PR_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('PR')
+dev.off()
+```
+
+# DL predictions activity
+
+```{r}
+pred <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/CHEQseq_tl_plasmid_lr_00001/roc_pr_dict.txt')
+rownames(pred) <- pred[,1]
+pred <- pred[,-1]
+colnames(pred) <- c('Active', 'Not active')
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/ROC_act.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'ROC_test'),] 
+x2 <- x[which(x$Set == 'ROC_shuffle'),] 
+x3 <- x[which(x$Set == 'ROC_train'),] 
+x4 <- x[which(x$Set == 'ROC_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('ROC')
+dev.off()
+````
+
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/PR_act.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'PR_test'),] 
+x2 <- x[which(x$Set == 'PR_shuffle'),] 
+x3 <- x[which(x$Set == 'PR_train'),] 
+x4 <- x[which(x$Set == 'PR_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('PR')
+dev.off()
+```
+
+# DL predictions activity
+
+```{r}
+pred <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/roc_pr_dict.txt')
+rownames(pred) <- pred[,1]
+pred <- pred[,-1]
+colnames(pred) <- c('General', 'Pericentral', 'Periportal')
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/ROC_zon.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'ROC_test'),] 
+x2 <- x[which(x$Set == 'ROC_shuffle'),] 
+x3 <- x[which(x$Set == 'ROC_train'),] 
+x4 <- x[which(x$Set == 'ROC_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('ROC')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/PR_zon.pdf')
+x <- melt(as.matrix(pred))
+colnames(x) <- c('Set', 'Topic', 'Value')
+x1 <- x[which(x$Set == 'PR_test'),] 
+x2 <- x[which(x$Set == 'PR_shuffle'),] 
+x3 <- x[which(x$Set == 'PR_train'),] 
+x4 <- x[which(x$Set == 'PR_valid'),] 
+ggplot(data=x1, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + 
+  geom_errorbar(data=x2, aes(y = Value, ymin = Value, ymax = Value), color="Brown1",lty=2) + 
+  geom_errorbar(data=x3, aes(y = Value, ymin = Value, ymax = Value), color="grey",lty=2) + 
+  geom_errorbar(data=x4, aes(y = Value, ymin = Value, ymax = Value), color="black",lty=2) + ylab('PR')
+dev.off()
+```
+
+# Comparison with Ahituv
+
+```{r}
+library(readxl)
+data <- read_excel("/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/Synthetic_Ahituv/Enhancer_data_for_R.xlsx")
+
+Mouse <- rowMeans(data[,grep('Mouse', colnames(data))])
+HepG2 <- rowMeans(data[,grep('HepG2', colnames(data))])
+plot(Mouse, HepG2)
+```
+
+```{r}
+cor(Mouse, HepG2)
+```
+
+```{r}
+DL_scores <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/CHEQseq_tl_plasmid_lr_00001/Synthetic_Ahituv_prediction_scores.tsv', sep=',', row.names=1)
+colnames(DL_scores) <- DL_scores[1,]
+DL_scores <- DL_scores[-1,]
+```
+
+```{r}
+names(Mouse) <- paste(as.vector(unlist(data[,'Template'])), 'hg18', as.vector(unlist(data[,'Pattern'])),'Synthetic_ahituv', sep='__')
+names(Mouse) <- gsub('_', '-', names(Mouse))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Ahituv_correlation.pdf')
+d <- cbind(as.numeric(DL_scores[names(Mouse), 1]), log(Mouse))
+colnames(d) <- c('x', 'y')
+d <- as.data.frame(d)
+d <- d[complete.cases(d),]
+d <- d[is.finite(d[,2]),]
+cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.67
+ggplot(d,aes(x, y)) + geom_point() + ylab('Enhancer activity') + xlab('DeepLiver prediction') + theme_bw() + ylim(-4,0)
+dev.off()
+```
+```{r,  fig.height = 8, fig.width = 20, fig.align = "center", message = FALSE, warnings = FALSE}
+plist <- list()
+TFs <- c('AHRARNT', 'AP2GAMMA', 'CEBP', 'COUPTF', 'GATA4', 'HNF1', 'HNF3', 'HNF4', 'HNF6', 'PPARA', 'Rxra', 'XBP1')
+for (TF in TFs){
+  col <- rep(scales::alpha('grey', 0.2), length(Mouse))
+  col[grep(TF, names(Mouse))] <- 'red'
+  df <- cbind(DL_scores[names(Mouse), 1], log(Mouse), col)
+  colnames(df) <- c('x', 'y', 'col')
+  df <- as.data.frame(df)
+  df[,1] <- as.numeric(df[,1])
+  df[,2] <- as.numeric(df[,2])
+  df[,3] <- as.factor(df[,3])
+  plist[[TF]] <- ggplot(df,aes(x, y)) + geom_point(colour=col) + ylab('Enhancer activity') + xlab('DeepLiver prediction') + theme_bw() + ylim(-4,0) + rremove("ylab") + rremove("xlab") + ggtitle(TF)
+}
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Ahituv_correlation_colored_by_TF.pdf', width=12, height=12)
+library(ggpubr)
+library(grid)
+figure <- ggarrange( plist[['AHRARNT']], plist[['AP2GAMMA']] , plist[['CEBP']] , plist[['COUPTF']], plist[['GATA4']], plist[['HNF1']], plist[['HNF3']], plist[['HNF4']], plist[['HNF6']], plist[['PPARA']], plist[['Rxra']], plist[['XBP1']]+ rremove("x.text"), 
+          ncol = 3, nrow = 4, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("Enhancer activity", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("DeepLiver prediction", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+Count TF sites per enhancer
+```{r}
+library(stringr)
+nb_sites <- vector()
+for (TF in TFs){
+  nb_sites <- cbind(nb_sites, sapply(names(Mouse), function(x) str_count(x, TF)))
+}
+colnames(nb_sites) <- TFs
+rownames(nb_sites) <- names(Mouse)
+```
+
+
+
+
+```{r,  fig.height = 8, fig.width = 20, fig.align = "center", message = FALSE, warnings = FALSE}
+plist <- list()
+TFs <- c('AHRARNT', 'AP2GAMMA', 'CEBP', 'COUPTF', 'GATA4', 'HNF1', 'HNF3', 'HNF4', 'HNF6', 'PPARA', 'Rxra', 'XBP1')
+x <-  log(Mouse)
+df <- cbind(DL_scores[names(Mouse), 1],x, nb_sites[names(Mouse),])
+colnames(df)[1:2] <- c('x', 'y')
+df <- as.data.frame(df)
+df[,1] <- as.numeric(df[,1])
+df[,2] <- as.numeric(df[,2])
+
+col.low <- "grey"
+col.mid <- "red"
+col.high <- "darkred"
+
+for (TF in TFs){
+  print(TF)
+  colorPal <- grDevices::colorRampPalette(c(col.low, col.mid, col.high))
+  df <- df[order(df[,TF]),]
+  regionColor <- setNames(adjustcolor(colorPal(10), alpha=.8)[as.numeric(cut(as.numeric(df[,TF]),breaks=10, right=F,include.lowest=T))], names(Mouse))
+  plist[[TF]] <- ggplot(df,aes(x, y)) + geom_point(colour=regionColor) + ylab('Enhancer activity') + xlab('DeepLiver prediction') + theme_bw() + ylim(-4,0) + rremove("ylab") + rremove("xlab") + ggtitle(TF) + scale_y_continuous(breaks=c(-4,-3,-2,-1,0),labels = c('0','0.25', '0.50', '0.75', '1'), limits=c(-4,0))
+}
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Ahituv_correlation_colored_by_TF_with_gradient.pdf', width=12, height=12)
+library(ggpubr)
+library(grid)
+figure <- ggarrange( plist[['AHRARNT']], plist[['AP2GAMMA']] , plist[['CEBP']] , plist[['COUPTF']], plist[['GATA4']], plist[['HNF1']], plist[['HNF3']], plist[['HNF4']], plist[['HNF6']], plist[['PPARA']], plist[['Rxra']], plist[['XBP1']], 
+          ncol = 3, nrow = 4, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("Enhancer activity", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("DeepLiver prediction", gp = gpar(cex = 1.3)))
+dev.off()
+```
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Barplot_cor.pdf')
+corx <- vector()
+for (TF in TFs){
+  corx <- c(corx, cor(df$x, as.numeric(df[,TF])))
+}
+x1 <- cbind(corx,TFs)
+colnames(x1) <-c('Correlation', 'TF')
+x1 <- as.data.frame(x1)
+x1[,1] <- as.numeric(x1[,1])
+ggplot(data=x1, aes(x=reorder(TF, -Correlation), y=Correlation)) + geom_bar(stat="identity") + theme_bw() + xlab('TF') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('Correlation DL-N.sites')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/HNF1A_corr.pdf')
+colnames(df)[1] <- 'x1'
+df$x1 <- as.numeric(df$x1)
+df$HNF1 <- as.numeric(df$HNF1)
+ggplot(df,aes(HNF1,x1)) + geom_point() + theme_bw() + xlab('Number of HNF1 sites') + ylab('DeepLiver predictions') +  
+     geom_smooth(method='lm', formula=y~exp(-x), se = TRUE,colour = 'blue',size=1) 
+dev.off()
+```
+
+# Mutagenesis saturation plot
+
+```{r}
+# AldoB
+acc <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/Topic48_AldoB_correlation.tsv')
+zon <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/General_AldoB_correlation.tsv')
+act <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/Active_AldoB_correlation.tsv')
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/AldoB_corrplot.pdf', width=3, height=9)
+p1 <- ggplot(acc,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+p2 <- ggplot(zon,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+p3 <- ggplot(act,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+figure <- ggarrange( p1, p2, p3, ncol = 1, nrow = 3, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("In vivo MPRA", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("In vitro MPRA", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+```{r}
+cor(acc[,1], acc[,2])
+cor(zon[,1], zon[,2])
+cor(act[,1], act[,2])
+```
+
+```{r}
+# LTV1
+acc <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/Topic2_LTV1_correlation.tsv')
+zon <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/General_LTV1_correlation.tsv')
+act <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/Active_LTV1_correlation.tsv')
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/LTV1_corrplot.pdf', width=3, height=9)
+p1 <- ggplot(acc,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+p2 <- ggplot(zon,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+p3 <- ggplot(act,aes(Invitro,Insilico)) + geom_point() + theme_bw() + xlab('In vitro MPRA') + ylab('In silico MPRA') +  
+     geom_smooth(method='lm', formula=y~x, se = TRUE,colour = 'blue',size=1) + rremove("ylab") + rremove("xlab")
+figure <- ggarrange( p1, p2, p3, ncol = 1, nrow = 3, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("In vivo MPRA", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("In vitro MPRA", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+```{r}
+cor(acc[,1], acc[,2])
+cor(zon[,1], zon[,2])
+cor(act[,1], act[,2])
+```
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/'
+files <- list.files(path)
+files <- files[grep('_correlation.tsv', files)]
+df <- matrix(ncol=3)
+for (file in files){
+  f <- read.table(paste0(path, file))
+  gene <- strsplit(file, '_')[[1]][2]
+  type <- strsplit(file, '_')[[1]][1]
+  if (type == 'Active'){
+    x <- 'Activity'
+  }
+  else if (type == 'General'){
+    x <- 'Zonation'
+  }
+  else if (type == 'PP'){
+    x <- 'Zonation'
+  }
+  else{
+    x <- 'Accessibility'
+  }
+  r <- cor(f[,1], f[,2])
+  row <- cbind(gene, x, r)
+  df <- rbind(df,row) 
+}
+colnames(df) <- c('Gene', 'Model', 'R')
+df <- as.data.frame(df)
+df$R <- as.numeric(df$R)
+df <- df[complete.cases(df),]
+df$Model <- factor(df$Model, levels=c('Accessibility', 'Zonation', 'Activity'))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CTRL_DL/barplot_correlation.pdf')
+ggplot(df, aes(fill=Model, y=R, x=Gene)) + 
+    geom_bar(position="dodge", stat="identity") + xlab('Enhancer') + theme_bw()
+dev.off()
+```
+
+
+# Comparison with Ahituv using topic model
+
+```{r}
+library(readxl)
+data <- read_excel("/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/Synthetic_Ahituv/Enhancer_data_for_R.xlsx")
+
+Mouse <- rowMeans(data[,grep('Mouse', colnames(data))])
+HepG2 <- rowMeans(data[,grep('HepG2', colnames(data))])
+plot(Mouse, HepG2)
+```
+
+```{r}
+cor(Mouse, HepG2)
+```
+
+```{r}
+DL_scores <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/V2_CHEQseq_tl_plasmid_lr_00001/topicmodel_Synthetic_Ahituv_prediction_scores.tsv', sep=',', row.names=1)
+colnames(DL_scores) <- paste0('Topic', 1:82)
+DL_scores <- DL_scores[-1,]
+```
+
+```{r}
+names(Mouse) <- paste(as.vector(unlist(data[,'Template'])), 'hg18', as.vector(unlist(data[,'Pattern'])),'Synthetic_ahituv', sep='__')
+names(Mouse) <- gsub('_', '-', names(Mouse))
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Ahituv_correlation_with_topic6.pdf')
+d <- cbind(as.numeric(DL_scores[names(Mouse), 'Topic6']), log(Mouse))
+colnames(d) <- c('x', 'y')
+d <- as.data.frame(d)
+d <- d[complete.cases(d),]
+d <- d[is.finite(d[,2]),]
+cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.63
+ggplot(d,aes(x, y)) + geom_point() + ylab('Enhancer activity') + xlab('DeepLiver topic 6 prediction') + theme_bw() + ylim(-4,0)
+dev.off()
+```
+```{r}
+topics <- c('Low_quality (1)', 'snATAC_Mouse-6 (2)', 'Low_quality (3)', 'snATAC_Mouse-6 (4)', 'MO-NST (5)', 'Hep_General (6)', 'Low_quality (7)', 'Hep_PC (8)', 'snATAC_Mouse-6 (9)', 'Low_quality (10)', 'Immune_cell (11)', 'HSC (12)', 'Low_quality (13)', 'General (14)', 'HSC (15)', 'Hep_PC (16)', 'ZT00-06_PP (17)', 'MO-10x (18)', 'Low_quality (19)', 'Low_quality (20)', 'LSEC (21)', 'Low_quality (22)', 'Low_quality (23)', 'DC (24)', 'MO-NST (25)','Low_quality (26)', 'Fibroblast (27)', 'MO-10x (28)', 'Low_quality (29)', 'MO-10x (30)', 'Low_quality (31)', 'HSC (32)', 'MSC (33)', 'Low_quality (34)', 'Low_quality (35)', 'Low_quality (36)', 'Hep_General (37)', 'Kupffer (38)', 'Low_quality (39)', 'Low_quality (40)', 'snATAC_Mouse-7 (41)', 'BEC (42)', 'Hep_General (43)', 'MO-NST (44)', 'Low_quality (45)', 'Low_quality (46)', 'Low_quality (47)', 'Hep_General (48)', 'Low_quality (49)', 'ZT12 (50)', 'snATAC_Mouse-6 (51)', 'Low_quality (52)', 'Low_quality (53)', 'Low_quality (54)', 'Low_quality (55)', 'ZT00-06_PC (56)', 'snATAC_Mouse-6 (57)', 'Hep_PC (58)', 'snATAC_Mouse-7 (59)', 'Hep_PC (60)', 'MO-10x (61)', 'Kupffer (62)', 'Low_quality (63)', 'MSC+BEC (64)', 'Low_quality (65)', 'Hep_PP (66)', 'Low_quality (67)', 'snATAC_Mouse-6 (68)', 'Low_quality (69)', 'snATAC_Mouse-6 (70)', 'LSEC (71)', 'Low_quality (72)', 'Low_quality (73)', 'Low_quality (74)', 'ZT12 (75)', 'Hep_PC (76)', 'Low_quality (77)', 'Low_quality (78)', 'Low_quality (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+pred <- DL_scores 
+colnames(pred) <- topics
+use <- unique(topics[c(grep('Hep_General', topics), grep('Hep_PP', topics), grep('Hep_PC', topics),  grep('Non-par', topics), grep('Kupffer', topics),  grep('Kupffer', topics), grep('Immune_cell', topics), grep('B_cell', topics), grep('T_cell', topics), grep('LSEC', topics), grep('VEC', topics), grep('HSC', topics), grep('Fibroblast', topics), grep('BEC', topics),grep('MSC', topics), grep('ZT00-06', topics), grep('ZT12', topics), grep('snATAC_Mouse-6', topics), grep('snATAC_Mouse-7', topics), grep('MO-10x', topics), grep('MO-NST', topics), grep('Low', topics))])
+pred <- pred[,use]
+```
+
+```{r}
+cor <- vector()
+for (i in 1:ncol(pred)){
+  d <- cbind(as.numeric(pred[names(Mouse), i]), log(Mouse))
+  colnames(d) <- c('x', 'y')
+  d <- as.data.frame(d)
+  d <- d[complete.cases(d),]
+  d <- d[is.finite(d[,2]),]
+  x <- cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.37
+  cor <- c(cor, x)
+}
+names(cor) <- colnames(pred)
+x <- as.data.frame(cor)
+x$Topic <- rownames(x)
+x$Value <- x$cor
+x$Topic <- factor(x$Topic, levels=use)
+```
+
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Ahituv_corr_topics_all.pdf')
+ggplot(data=x, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('R')
+dev.off()
+```
+
+# Distance analysis
+
+```{r}
+df1 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/all_hits.tsv', header=TRUE)
+df2 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/individual_hits_with_scores_tfnnconv1d.txt', header=TRUE)
+df1$Region <- paste0(df1[,6], ':', df1[,7], '-', df1[,8])
+df1 <- df1[,c(9:ncol(df1))]
+df <- merge(df2, df1, by='Region')
+df <- df[!duplicated(df),]
+head(df)
+```
+
+```{r}
+library(SCopeLoomR)
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_simplified/atac_curated/SCENIC+_curated_region_based.loom'
+loom <- open_loom(loom_path)
+cells_AUC_region <- getAUC(get_regulons_AUC(loom, column.attr.name='RegulonsAUC'))
+rownames(cells_AUC_region) <- gsub('_extended', '', rownames(cells_AUC_region) )
+```
+
+```{r}
+# Export selected region regulons to bed file
+# Get eRegulons
+regulons_regions <- get_regulons(loom, column.attr.name='Regulons')
+regulon_list_regions <- list()
+for (row in rownames(regulons_regions)){
+  regulon_list_regions[[row]] <- colnames(regulons_regions)[which(regulons_regions[row,] == 1)]
+}
+names(regulon_list_regions) <- gsub('_extended', '', names(regulon_list_regions))
+```
+
+```{r}
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+thr <- c(0.1,0.01, 0.05, 0.05,0.05, 0,0.01, 0.05)
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- df[which(df$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  x <- x[which(x$Score > 0.01),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% df$Region)]
+  #print(sum(y %in% x$Region)/length(y))
+  x <- x[which(x$Score > thr[i]),]
+  x <- x[!duplicated(x),]
+  print(sum(y %in% x$Region)/length(y))
+  g <- cbind(x$DL_scr_General_t1, rep('General', nrow(x)))
+  pc <- cbind(x$DL_scr_PC_t2, rep('PC', nrow(x)))
+  pp <- cbind(x$DL_scr_PP_t2, rep('PP', nrow(x)))
+  d <- rbind(g, pc, pp)
+  d <- as.data.frame(d)
+  colnames(d) <- c('Score', 'Class')
+  my_comparisons <- list( c("General", "PC"), c("General", "PP"), c("PC", "PP") )
+  d[,1] <- as.numeric(d[,1])
+  plist[[TF]] <- ggplot(d, aes(x = Class, y = Score, fill=Class)) + geom_boxplot() + theme_bw() + xlab("Class") + ylab('DeepLiver Score') + theme(axis.text.x = element_text(angle = 45, hjust=1)) +  stat_compare_means(comparisons = my_comparisons) + NoLegend() + ggtitle(paste0(TF,' - ', nrow(x))) + rremove("ylab") + rremove("xlab")
+}
+```
+
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/motif_hits_boxplot.pdf', width=12, height=10)
+figure <- ggarrange( plist[['Tbx']], plist[['Tcf7']], plist[['Foxa']], plist[['Hnf1a']], plist[['Hnf4a']], plist[['Nfi']], plist[['Onecut']], plist[['Cebpa']], ncol = 4, nrow = 2, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("Score", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Class", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+```{r}
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- df[which(df$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  #x <- x[which(x$Score > 0.05),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% df$Region)]
+  #print(sum(y %in% x$Region)/length(y))
+  #x <- x[which(x$Score > thr[i]),]
+  x <- x[!duplicated(x),]
+  print(dim(x))
+  print(sum(y %in% x$Region)/length(y))
+}
+ov <- c(0.7, 0.27, 0.29, 0.34, 0.56, 0.11, 0.17, 0.44)
+ov <- as.data.frame(ov)
+ov$regulon<- regs
+colnames(ov)[1] <- 'Overlap'
+ov$regulon <- as.factor(ov$regulon)
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/overlap_barplot.pdf', width=12, height=10)
+myColors <- c('Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#ec662f", 'Tbx3_-'='#f7beca')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+ggplot(data=ov, aes(x=reorder(regulon, -Overlap), y=Overlap, fill=regulon)) + geom_bar(stat="identity") + theme_bw() + xlab('Regulon') + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('Overlap') + colScale
+dev.off()
+```
+# And on regulons directly?
+```{r}
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- df[which(df$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  x <- x[which(x$Score > 0.01),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% df$Region)]
+  x <- x[which(x$Region %in% y),]
+  x <- x[!duplicated(x),]
+  print(sum(y %in% x$Region)/length(y))
+  g <- cbind(x$DL_scr_General_t1, rep('General', nrow(x)))
+  pc <- cbind(x$DL_scr_PC_t2, rep('PC', nrow(x)))
+  pp <- cbind(x$DL_scr_PP_t2, rep('PP', nrow(x)))
+  d <- rbind(g, pc, pp)
+  d <- as.data.frame(d)
+  colnames(d) <- c('Score', 'Class')
+  my_comparisons <- list( c("General", "PC"), c("General", "PP"), c("PC", "PP") )
+  d[,1] <- as.numeric(d[,1])
+  plist[[TF]] <- ggplot(d, aes(x = Class, y = Score, fill=Class)) + geom_boxplot() + theme_bw() + xlab("Class") + ylab('DeepLiver Score') + theme(axis.text.x = element_text(angle = 45, hjust=1)) +  stat_compare_means(comparisons = my_comparisons) + NoLegend() + ggtitle(paste0(TF,' - ', nrow(x))) + rremove("ylab") + rremove("xlab")
+}
+```
+
+```{r}
+figure <- ggarrange( plist[['Tbx']], plist[['Tcf7']], plist[['Foxa']], plist[['Hnf1a']], plist[['Hnf4a']], plist[['Nfi']], plist[['Onecut']], plist[['Cebpa']], ncol = 4, nrow = 2, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("Score", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Class", gp = gpar(cex = 1.3)))
+```
+
+# Make predictions directly on regulons
+
+```{r}
+library(SCopeLoomR)
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_simplified/atac_curated/SCENIC+_curated_region_based.loom'
+loom <- open_loom(loom_path)
+cells_AUC_region <- getAUC(get_regulons_AUC(loom, column.attr.name='RegulonsAUC'))
+rownames(cells_AUC_region) <- gsub('_extended', '', rownames(cells_AUC_region) )
+```
+
+```{r}
+# Export selected region regulons to bed file
+# Get eRegulons
+regulons_regions <- get_regulons(loom, column.attr.name='Regulons')
+regulon_list_regions <- list()
+for (row in rownames(regulons_regions)){
+  regulon_list_regions[[row]] <- colnames(regulons_regions)[which(regulons_regions[row,] == 1)]
+}
+names(regulon_list_regions) <- gsub('_extended', '', names(regulon_list_regions))
+```
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/All_regions_zonation_prediction_scores.tsv', sep=',', header=T, row.names=1)
+df1 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/all_hits.tsv', header=TRUE)
+df2 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/individual_hits_with_scores_tfnnconv1d.txt', header=TRUE)
+df1$Region <- paste0(df1[,6], ':', df1[,7], '-', df1[,8])
+df1 <- df1[,c(9:ncol(df1))]
+dfx <- merge(df2, df1, by='Region')
+dfx <- dfx[!duplicated(dfx),]
+
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  sel <- unique(as.vector(unlist(dfx[which(dfx$TF == TF), c('Region')])))
+  y <- regulon_list_regions[[reg]]
+  x <- df[which(rownames(df) %in% y),]
+  #if (TF != 'Hnf1a'){
+  #  x <- x[which(rownames(x) %in% sel),]
+  #}
+  g <- cbind(x$General, rep('General', nrow(x)))
+  pc <- cbind(x$PC, rep('PC', nrow(x)))
+  pp <- cbind(x$PP, rep('PP', nrow(x)))
+  d <- rbind(g, pc, pp)
+  d <- as.data.frame(d)
+  colnames(d) <- c('Score', 'Class')
+  my_comparisons <- list( c("General", "PC"), c("General", "PP"), c("PC", "PP") )
+  d[,1] <- as.numeric(d[,1])
+  plist[[TF]] <- ggplot(d, aes(x = Class, y = Score, fill=Class)) + geom_boxplot() + theme_bw() + xlab("Class") + ylab('DeepLiver Score') + theme(axis.text.x = element_text(angle = 45, hjust=1)) +  stat_compare_means(comparisons = my_comparisons) + NoLegend() + ggtitle(paste0(TF,' - ', nrow(x))) + rremove("ylab") + rremove("xlab")
+}
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/regulon_prediction_boxplot_zonation.pdf', width=12, height=10)
+figure <- ggarrange( plist[['Tbx']], plist[['Tcf7']], plist[['Foxa']], plist[['Hnf1a']], plist[['Hnf4a']], plist[['Nfi']], plist[['Onecut']], plist[['Cebpa']], ncol = 4, nrow = 2, common.legend = TRUE, align = "hv")
+annotate_figure(figure, left = textGrob("Score", rot = 90, vjust = 1, gp = gpar(cex = 1.3)),
+                    bottom = textGrob("Class", gp = gpar(cex = 1.3)))
+dev.off()
+```
+
+# For activity
+
+```{r}
+df <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/All_regions_activity_prediction_scores.tsv', sep=',', header=T, row.names=1)
+dfp<- matrix(ncol=2)
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+thr <- c(0.05,0.01, 0.05, 0.05,0.05, 0,0.01, 0.05)
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- dfx[which(dfx$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  x <- x[which(x$Score > 0.01),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% dfx$Region)]
+  #print(sum(y %in% x$Region)/length(y))
+  x <- x[which(x$Score > thr[i]),]
+  x <- x[!duplicated(x),]
+  sel <- unlist(as.vector(x$Region))
+  x <- df[sel,]
+  g <- cbind(x$Active, rep(reg, nrow(x)))
+  dfp <- rbind(dfp, g)
+}
+dfp <- as.data.frame(dfp)
+dfp[,1] <- as.numeric(dfp[,1])
+dfp[,2] <- as.factor(dfp[,2])
+colnames(dfp) <- c('Score', 'Regulon')
+dfp <- dfp[complete.cases(dfp),]
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/motif_hits_activity_prediction.pdf')
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c('Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#ec662f", 'Tbx3_-'='#f7beca')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+ggplot(dfp, aes(x = reorder(Regulon, Score, FUN = mean, na.rm = TRUE), y = Score, fill=Regulon)) + geom_boxplot() + theme_bw() + xlab("Regulon") + ylab('DeepLiver Score') + theme(axis.text.x = element_text(angle = 45, hjust=1)) +  stat_compare_means(comparisons = my_comparisons) + NoLegend() + rremove("ylab") + rremove("xlab") + colScale + coord_flip()
+dev.off()
+```
+
+# Distance analysis
+
+```{r}
+df1 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/all_hits.tsv', header=TRUE)
+df2 <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/DeepTopic/DARs_Zonation_lr_00001/individual_hits_with_scores_tfnnconv1d.txt', header=TRUE)
+df1$Region <- paste0(df1[,6], ':', df1[,7], '-', df1[,8])
+df1 <- df1[,c(9:ncol(df1))]
+df <- merge(df2, df1, by='Region')
+df <- df[!duplicated(df),]
+head(df)
+```
+
+```{r}
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+thr <- c(0.075,0.05, 0.05, 0.05,0.05, 0,0.01, 0.05)
+#thr <- c(0.075,0.05, 0.01, 0.01,0.01, 0,0.01, 0.01)
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- df[which(df$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  x <- x[which(x$Score > 0.01),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% df$Region)]
+  x <- x[which(x$Score > thr[i]),]
+  x <- x[!duplicated(x),]
+  plist[[TF]] <- unique(as.vector(unlist(x$Region)))
+  print(nrow(x))
+}
+```
+
+```{r}
+library(UpSetR)
+upset(fromList(plist), order.by = "freq", nsets = 8)
+```
+```{r}
+plist <- list()
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+regs <- c('Tbx3_-', 'Tcf7l1_-', 'Foxa1_+', 'Hnf1a_+', 'Hnf4a_+', 'Nfib_+', 'Onecut1_+', 'Cebpa_+')
+#thr <- c(0.075,0.05, 0.05, 0.05,0.05, 0,0.01, 0.05)
+thr <- c(0.05,0.01, 0.01, 0.01,0.01, 0,0.01, 0.01)
+for (i in 1:length(TFs)){
+  TF <- TFs[i]
+  reg <- regs[i]
+  x <- df[which(df$TF == TF), c('Region', 'Score', 'DL_scr_General_t1', 'DL_scr_PC_t2',  'DL_scr_PP_t2', 'mean_atac_Hep_PP_PC_1', 'mean_atac_Hep_PP_PC_2', 'mean_atac_Hep_PP_PC_3')]
+  x <- x[which(x$Score > 0.01),]
+  x <- x[!duplicated(x),]
+  y <- regulon_list_regions[[reg]]
+  y <- y[which(y %in% df$Region)]
+  x <- x[which(x$Score > thr[i]),]
+  x <- x[!duplicated(x),]
+  plist[[TF]] <- unique(as.vector(unlist(x$Region)))
+  print(nrow(x))
+}
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/upset_motif_overlap.pdf', width=12, height=4)
+names(plist) <-  c('Tbx3', 'Tcf7l1', 'Foxa1', 'Hnf1a', 'Hnf4a', 'Nfib', 'Onecut1', 'Cebpa')
+library(UpSetR)
+upset(fromList(plist), order.by = "freq", nsets = 8)
+dev.off()
+```
+
+```{r}
+library(RColorBrewer)
+plotlist <- list()
+c <-brewer.pal(8,'Greens')
+myColors <- c('Cebpa' = "#4783c4", 'Hnf4a' = "#268c37", 'Foxa' = "#e94547", 'Onecut' = "#6c4696",  'Hnf1a' = '#fbb81c', 'Nfi'='#5bc0cc', 'Tcf7' = "#ec662f", 'Tbx'='#f7beca')
+colScale <- scale_color_manual(name = "grp",values = myColors, guide='none') 
+TFs <- c('Tbx', 'Tcf7', 'Foxa', 'Hnf1a', 'Hnf4a', 'Nfi', 'Onecut', 'Cebpa')
+for (TF1 in TFs){
+  dx <- matrix(ncol=3)
+  for (TF2 in TFs){
+    df1 <- df[which(df$TF == TF1), c('Region', 'Score', 'Start', 'End')]
+    df1 <- df1[which(df1$Region %in% plist[[TF1]]),]
+    df1 <- df1[rev(order(df1$Score)),]
+    df1 <- df1[,c('Region','Start', 'End')]
+    df1 <- df1[!duplicated(df1$Region),]
+    df2 <- df[which(df$TF == TF2), c('Region', 'Score', 'Start', 'End')]
+    df2 <- df2[which(df2$Region %in% plist[[TF2]]),]
+    df2 <- df2[rev(order(df2$Score)),]
+    df2 <- df2[,c('Region','Start', 'End')]
+    df2 <- df2[!duplicated(df2$Region),]
+    mdf <- merge(df1, df2, by='Region')
+    if (nrow(mdf) > 10){
+      mdf$rel.start <- mdf$Start.x-mdf$Start.y
+      mdf$rel.end <- mdf$End.x-mdf$End.y
+      # Kernel Density Plot
+      h <- hist(mdf$rel.start, breaks=50, plot=FALSE)
+      d <- cbind(h$mids, h$counts)
+      colnames(d) <- c('Position', 'Frequency')
+      d <- as.data.frame(d)
+      d$TF <- rep(TF2, nrow(d))
+      d <- as.matrix(d)
+      if (TF1 != TF2){
+        dx <- rbind(dx, d)
+    }
+    }
+  }
+  dx <- as.data.frame(dx)
+  colnames(dx) <- c('Position', 'Frequency', 'TF')
+  dx <- dx[complete.cases(dx),]
+  dx[,1] <- as.numeric(dx[,1])
+  dx[,2] <- as.numeric(dx[,2])
+  dx[,3] <- as.factor(dx[,3])
+  plotlist[[TF1]] <- ggplot(dx, aes(x = Position, y = Frequency, color=TF)) + theme_bw() + geom_line()+ colScale + ggtitle(TF1)
+}
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/distance.pdf', width=12, height=4)
+figure <- ggarrange( plotlist[['Tbx']], plotlist[['Tcf7']], plotlist[['Foxa']], plotlist[['Hnf1a']], plotlist[['Hnf4a']], plotlist[['Nfi']], plotlist[['Onecut']], plotlist[['Cebpa']], ncol = 4, nrow = 2, common.legend = TRUE, align = "hv")
+figure
+dev.off()
+```
+
+# Make coverage plots
+
+```{r}
+regionNamesToDF <- function(region_names){
+  seqnames <- sapply(strsplit(region_names, split = ":"), "[", 1)
+  coords <- sapply(strsplit(region_names, split = ":"), "[", 2)
+  start <- sapply(strsplit(coords, split = "-"), "[", 1)
+  end <- sapply(strsplit(coords, split = "-"), "[", 2)
+  dataframe <- as.data.frame(cbind(seqnames, start, end))
+  colnames(dataframe) <- c('seqnames', 'start', 'end')
+  return(dataframe)
+}
+```
+
+```{r}
+# In general to show links
+r2g <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/r2g_links/all_eGRN_links.Rds')
+r2g_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/r2g_links/region_to_gene.tsv', sep='\t', header=TRUE)
+r2g$ID <- paste0(r2g$sourceName, '_', r2g$name)
+r2g_data$ID <- paste0(r2g_data$region, '_', r2g_data$target)
+r2g_links <- merge(r2g, r2g_data, by='ID')
+r2g_links <- r2g_links[complete.cases(r2g_links),]
+rang <- r2g_links[,c(2,3,4)]
+colnames(rang) <- c('seqnames', 'start', 'end')
+library(GenomicRanges)
+r2g_links_gr <- makeGRangesFromDataFrame(rang)
+r2g_links_gr$gene <- r2g_links$name
+r2g_links_gr$score <- r2g_links$rho
+```
+
+```{r}
+gene <- 'Cdh1'
+region <- 'chr8-106586842-106608770'
+combined <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes.RDS')
+combined_r2g <- combined
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+#library(BSgenome.Mmusculus.UCSC.mm10)
+DefaultAssay(combined_r2g) <- "ATAC"
+r2g_links_gr <- r2g_links_gr[which(r2g_links_gr$gene == gene),]
+r2g_links_gr$score[which(r2g_links_gr$score < 0)] <- 0
+Links(combined_r2g) <- r2g_links_gr
+```
+
+```{r}
+# Bigwig
+gregion <- as(sub('-', ':', region), "GRanges")
+blist <- list()
+blist[['Hnf4a']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Hnf4a_ERR235753_q4_sorted.normalized.bw'
+blist[['Cebpa']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Cebpa_ERR235722_q4_sorted.normalized.bw'
+blist[['Foxa1']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Foxa1_ERR235781_q4_sorted.normalized.bw'
+blist[['Onecut1']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Onecut1_ERR235752_q4_sorted.normalized.bw'
+library(ggplot2)
+bw <- BigwigTrack(gregion, blist, bigwig.scale='separate', smooth=200) & scale_fill_manual(values = c("#268c37", "#4783c4", "#e94547",  "#6c4696"))
+```
+
+
+```{r}
+# Coverage
+cov_plot <- CoveragePlot(
+  object = combined_r2g,
+  region = region,
+  features = gene, 
+  group.by = 'Refined_cell_type',
+  annotation = FALSE,
+  peaks = FALSE,
+  links = FALSE,
+)  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a")) 
+# Annotation
+gene_plot <- AnnotationPlot(
+  object = combined_r2g,
+  region = region
+)
+# Links
+library(RColorBrewer)
+link_plot_1 <- LinkPlot(
+  object = combined_r2g,
+  region = region,
+  min.cutoff = -1
+)  + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+ scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+# Expression
+expr.plot <- ExpressionPlot(combined, features = c('Tbx3', 'Cdh1'), assay = "RNA", group.by = 'Refined_cell_type')  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a"))
+library(patchwork)
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Cdh1_plot_full.pdf')
+p <- CombineTracks(
+  plotlist = list( cov_plot, bw, link_plot_1, gene_plot),
+  expression.plot = expr.plot,
+  heights = c(5, 4, 2, 2),
+  widths = c(10,1)
+)
+p
+dev.off()
+```
+
+```{r}
+r2g_links_gr <- makeGRangesFromDataFrame(rang)
+r2g_links_gr$gene <- r2g_links$name
+r2g_links_gr$score <- r2g_links$rho
+gene <- 'Cyp2e1'
+region <- 'chr7-140753329-140765661'
+combined <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_1/Signac_objects/Hepatocytes.RDS')
+combined_r2g <- combined
+library(Signac)
+library(Seurat)
+library(EnsDb.Mmusculus.v79)
+library(BSgenome.Mmusculus.UCSC.mm10)
+DefaultAssay(combined_r2g) <- "ATAC"
+r2g_links_gr <- r2g_links_gr[which(r2g_links_gr$gene == gene),]
+r2g_links_gr$score[which(r2g_links_gr$score < 0)] <- 0
+Links(combined_r2g) <- r2g_links_gr
+```
+
+```{r}
+# Bigwig
+gregion <- as(sub('-', ':', region), "GRanges")
+blist <- list()
+blist[['Hnf4a']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Hnf4a_ERR235753_q4_sorted.normalized.bw'
+blist[['Cebpa']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Cebpa_ERR235722_q4_sorted.normalized.bw'
+blist[['Foxa1']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Foxa1_ERR235781_q4_sorted.normalized.bw'
+blist[['Onecut1']] <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Liver_CHIP/norm_bw/Onecut1_ERR235752_q4_sorted.normalized.bw'
+library(ggplot2)
+bw <- BigwigTrack(gregion, blist, smooth=200) & scale_fill_manual(values = c("#268c37", "#4783c4", "#e94547",  "#6c4696"))
+```
+
+
+```{r}
+# Coverage
+cov_plot <- CoveragePlot(
+  object = combined_r2g,
+  region = region,
+  features = gene, 
+  group.by = 'Refined_cell_type',
+  annotation = FALSE,
+  peaks = FALSE,
+  links = FALSE,
+)  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a")) 
+# Annotation
+gene_plot <- AnnotationPlot(
+  object = combined_r2g,
+  region = region
+)
+# Links
+link_plot_1 <- LinkPlot(
+  object = combined_r2g,
+  region = region,
+  min.cutoff = -1
+)  + scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+ scale_colour_gradientn(colours = brewer.pal(n = 11, name = "Reds"), limits=c(0, NA))  # + scale_y_reverse()
+# Expression
+expr.plot <- ExpressionPlot(combined, features = c('Tcf7l1', 'Cyp2e1'), assay = "RNA", group.by = 'Refined_cell_type')  & scale_fill_manual(values = c("#9da81f", "#6fb12d", "#38aa35", "#3cae62", "#38b18a"))
+library(patchwork)
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/Cyp2e1_plot_full.pdf')
+p <- CombineTracks(
+  plotlist = list( cov_plot, bw, link_plot_1, gene_plot),
+  expression.plot = expr.plot,
+  heights = c(5, 4, 2, 2),
+  widths = c(10,1)
+)
+p
+dev.off()
+```
+
+# Correlation
+
+```{r}
+cell_data <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/pycisTopic_cell_data.tsv', header=TRUE)
+rownames(cell_data) <- gsub("-1-TEW__043783__Mouse_4_Multiome_10x", "-TEW__043783__523d9c__Multiome_Liver_10xprotocol" ,rownames(cell_data))
+rownames(cell_data) <- gsub("-1-TEW__ebb273__Mouse_5_Multiome_NST","-TEW__ebb273__b33e6f__Multiome_Liver_CTRL_NSTprotocol", rownames(cell_data))
+Hep_cells <- rownames(cell_data[grep('Hep', cell_data$Refined_cell_type_ATAC),])
+Hep_cells <- Hep_cells[grep('Multiome', Hep_cells)]
+```
+
+```{r}
+PRTM <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/ScoMAP/PRTM.Rds')
+Hep_cells <- Hep_cells[which(Hep_cells %in% colnames(PRTM))]
+PRTM <- PRTM[,Hep_cells]
+cell_data <- cell_data[Hep_cells,]
+```
+
+```{r}
+library(SCopeLoomR)
+loom_path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/scenicplus/final_objects/all_simplified/rna_curated/SCENIC+_curated_gene_based.loom'
+loom <- open_loom(loom_path)
+dgem <- get_dgem(loom)
+rcell_data <- get_cell_annotation(loom)
+dgem <- dgem[,Hep_cells]
+```
+
+# CHEQ-seq prediction from accessibility model
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+x <- enhancers$mallet_regions
+x <- x[-which(is.na(x))]
+write.table(x, file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/pycistopic/regions_in_CHEQseq')
+```
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+DL_scores <- read.table('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/12K_regions_topicmodel_prediction_scores.tsv', sep=',', row.names=1)
+colnames(DL_scores) <- paste0('Topic', 1:82)
+DL_scores <- DL_scores[-1,]
+```
+
+```{r}
+topics <- c('Low_quality (1)', 'snATAC_Mouse-6 (2)', 'Low_quality (3)', 'snATAC_Mouse-6 (4)', 'MO-NST (5)', 'Hep_General (6)', 'Low_quality (7)', 'Hep_PC (8)', 'snATAC_Mouse-6 (9)', 'Low_quality (10)', 'Immune_cell (11)', 'HSC (12)', 'Low_quality (13)', 'General (14)', 'HSC (15)', 'Hep_PC (16)', 'ZT00-06_PP (17)', 'MO-10x (18)', 'Low_quality (19)', 'Low_quality (20)', 'LSEC (21)', 'Low_quality (22)', 'Low_quality (23)', 'DC (24)', 'MO-NST (25)','Low_quality (26)', 'Fibroblast (27)', 'MO-10x (28)', 'Low_quality (29)', 'MO-10x (30)', 'Low_quality (31)', 'HSC (32)', 'MSC (33)', 'Low_quality (34)', 'Low_quality (35)', 'Low_quality (36)', 'Hep_General (37)', 'Kupffer (38)', 'Low_quality (39)', 'Low_quality (40)', 'snATAC_Mouse-7 (41)', 'BEC (42)', 'Hep_General (43)', 'MO-NST (44)', 'Low_quality (45)', 'Low_quality (46)', 'Low_quality (47)', 'Hep_General (48)', 'Low_quality (49)', 'ZT12 (50)', 'snATAC_Mouse-6 (51)', 'Low_quality (52)', 'Low_quality (53)', 'Low_quality (54)', 'Low_quality (55)', 'ZT00-06_PC (56)', 'snATAC_Mouse-6 (57)', 'Hep_PC (58)', 'snATAC_Mouse-7 (59)', 'Hep_PC (60)', 'MO-10x (61)', 'Kupffer (62)', 'Low_quality (63)', 'MSC+BEC (64)', 'Low_quality (65)', 'Hep_PP (66)', 'Low_quality (67)', 'snATAC_Mouse-6 (68)', 'Low_quality (69)', 'snATAC_Mouse-6 (70)', 'LSEC (71)', 'Low_quality (72)', 'Low_quality (73)', 'Low_quality (74)', 'ZT12 (75)', 'Hep_PC (76)', 'Low_quality (77)', 'Low_quality (78)', 'Low_quality (79)', 'MSC (80)', 'B_cell (81)', 'T_cell (82)')
+pred <- DL_scores 
+colnames(pred) <- topics
+use <- unique(topics[c(grep('Hep_General', topics), grep('Hep_PP', topics), grep('Hep_PC', topics),  grep('Non-par', topics), grep('Kupffer', topics),  grep('Kupffer', topics), grep('Immune_cell', topics), grep('B_cell', topics), grep('T_cell', topics), grep('LSEC', topics), grep('VEC', topics), grep('HSC', topics), grep('Fibroblast', topics), grep('BEC', topics),grep('MSC', topics), grep('ZT00-06', topics), grep('ZT12', topics), grep('snATAC_Mouse-6', topics), grep('snATAC_Mouse-7', topics), grep('MO-10x', topics), grep('MO-NST', topics), grep('Low', topics))])
+pred <- pred[,use]
+Mouse <- enhancers[rownames(pred),'Invivo_24h_LogFC']
+```
+
+```{r}
+colScale <- scale_fill_brewer(palette = "Set3")
+```
+
+```{r}
+controls <- cbind(enhancers, DL_scores[rownames(enhancers),])
+controls$annotation[grep('Shuffle', enhancers$Hepatocyte_consensus_class)] <- 'Shuffle'
+controls$annotation[grep('Downstream', controls$annotation)] <- 'Downstream'
+controls$annotation[grep('Promoter', controls$annotation)] <- 'Promoter'
+```
+
+```{r}
+ggplot(controls, aes(y=Invivo_24h_LogFC,x=Topic48, color=annotation)) + geom_point(alpha=.5) +  theme_bw() + xlab("DeepLiver") + ylab('In vivo LogFC')  + colScale
+```
+
+```{r}
+cor <- vector()
+for (i in 1:ncol(pred)){
+  d <- cbind(as.numeric(pred[, i]), Mouse)
+  colnames(d) <- c('x', 'y')
+  d <- as.data.frame(d)
+  d <- d[complete.cases(d),]
+  d <- d[is.finite(d[,2]),]
+  x <- cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.37
+  cor <- c(cor, x)
+}
+names(cor) <- colnames(pred)
+x <- as.data.frame(cor)
+x$Topic <- rownames(x)
+x$Value <- x$cor
+```
+
+```{r}
+x$Topic <- factor(x$Topic, levels=use)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CHEQseq_corr_topics_all.pdf')
+ggplot(data=x, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('R')
+dev.off()
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CHEQseq_correlation_with_topic48.pdf')
+d <- cbind(as.numeric(DL_scores[,48]), Mouse)
+colnames(d) <- c('x', 'y')
+d <- as.data.frame(d)
+d <- d[complete.cases(d),]
+d <- d[is.finite(d[,2]),]
+cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.30
+ggplot(d,aes(x, y)) + geom_point() + ylab('Enhancer activity') + xlab('DeepLiver topic 48 prediction') + theme_bw()
+dev.off()
+```
+
+```{r}
+select <- rownames(enhancers[grep('Promoter', enhancers$annotation),])
+names(Mouse) <- rownames(pred)
+pred <- pred[select,]
+Mouse <- Mouse[select]
+```
+
+```{r}
+cor <- vector()
+for (i in 1:ncol(pred)){
+  d <- cbind(as.numeric(pred[, i]), Mouse)
+  colnames(d) <- c('x', 'y')
+  d <- as.data.frame(d)
+  d <- d[complete.cases(d),]
+  d <- d[is.finite(d[,2]),]
+  x <- cor(as.numeric(d[,1]), as.numeric(d[,2])) #0.37
+  cor <- c(cor, x)
+}
+names(cor) <- colnames(pred)
+x <- as.data.frame(cor)
+x$Topic <- rownames(x)
+x$Value <- x$cor
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_4/plots/CHEQseq_corr_topics_all_distal.pdf')
+ggplot(data=x, aes(x=Topic, y=Value)) + geom_bar(stat="identity") + theme_bw() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + ylab('R')
+dev.off()
+```
+

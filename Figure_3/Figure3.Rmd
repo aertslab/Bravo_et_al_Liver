@@ -1,0 +1,838 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# 0. Load enhancer info data
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+```
+
+# 1. Controls
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c('Sharp-MPRA'= c[2],  "Shendure"= c[4], "STARR-seq"= c[6], "Shuffle"= 'red', "Positive control hg19"= c[8], "Positive control mm10"= 'seagreen')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+controls <- enhancers[which(enhancers$Enhancer_type %in% c('Control_Sharp-MPRA', 'Control_Shendure', 'Control_STARR-seq', 'Shuffle')),]
+controls$Enhancer_type <- gsub('Control_', '', controls$Enhancer_type)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Controls_in_vivo.pdf')
+ggplot(controls, aes(x = reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+ggplot(controls, aes(x = reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Controls_in_vitro.pdf')
+ggplot(controls, aes(x = reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+ggplot(controls, aes(x = reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+
+```{r}
+controls <- enhancers[which(enhancers$Enhancer_type %in% c('Control_Sharp-MPRA', 'Control_Shendure', 'Control_STARR-seq', 'Shuffle', 'HepG2_mm10')),]
+controls$Enhancer_type[grep('Control_', controls$Enhancer_type)] <- 'Positive control hg19'
+controls$Enhancer_type[grep('HepG2_mm10', controls$Enhancer_type)] <- 'Positive control mm10'
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Controls_in_vivo_human_vs_mouse.pdf')
+ggplot(controls, aes(x = reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+ggplot(controls, aes(x = reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Enhancer_type, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Controls_in_vitro_human_vs_mouse.pdf')
+ggplot(controls, aes(x = reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+ggplot(controls, aes(x = reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Enhancer_type, -HepG2_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Control type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+# 2. All sequences
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Intermediate'= "#00BD61", 'Pericentral'="#00C08E", 'General'="#00B813", 'Shared'='dodgerblue')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+controls <- enhancers
+controls$Hepatocyte_consensus_class[grep('Positive_control', controls$Hepatocyte_consensus_class)] <- 'Positive control'
+controls$Hepatocyte_consensus_class[grep('BEC', controls$Hepatocyte_consensus_class)] <- 'Shared'
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/All_in_vivo.pdf')
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/All_in_vitro.pdf')
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle", method.args = list(alternative = "greater"), symnum.args = list(cutpoints = c(0, 0.000001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle", method.args = list(alternative = "greater"), symnum.args = list(cutpoints = c(0, 0.000001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+# 3a. All sequences, combining intermediate and PC
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Intermediate'= "#00BD61", 'Pericentral'="#00C08E", 'General'="#00B813", 'Shared'='dodgerblue')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+controls <- enhancers
+controls$Hepatocyte_consensus_class[grep('Positive_control', controls$Hepatocyte_consensus_class)] <- 'Positive control'
+controls$Hepatocyte_consensus_class[grep('BEC', controls$Hepatocyte_consensus_class)] <- 'Shared'
+controls$Hepatocyte_consensus_class[grep('Intermediate', controls$Hepatocyte_consensus_class)] <- 'Pericentral'
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/All_in_vivo_combined.pdf')
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/All_in_vitro_combined.pdf')
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle", method.args = list(alternative = "greater"), symnum.args = list(cutpoints = c(0, 0.000001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+ggplot(controls, aes(x = reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(Hepatocyte_consensus_class, -Invivo_24h_LogFC, FUN = median, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle", method.args = list(alternative = "greater"), symnum.args = list(cutpoints = c(0, 0.000001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))) + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+
+# 3b. Region type
+
+```{r}
+colScale <- scale_fill_brewer(palette = "Set3")
+```
+
+```{r}
+controls <- enhancers
+controls$annotation[grep('Shuffle', enhancers$Hepatocyte_consensus_class)] <- 'Shuffle'
+controls$annotation[grep('Downstream', controls$annotation)] <- 'Downstream'
+controls$annotation[grep('Promoter', controls$annotation)] <- 'Promoter'
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Annotation_in_vivo.pdf')
+ggplot(controls, aes(x = reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+
+ggplot(controls, aes(x = reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Annotation_in_vitro.pdf')
+ggplot(controls, aes(x = reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+
+ggplot(controls, aes(x = reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(annotation, -Invivo_24h_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Region type") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+
+# 4a. Correlation plot colored by region type
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Intermediate'= "#00BD61", 'Pericentral'="#00C08E", 'General'="#00B813", 'Shared'='dodgerblue')
+#myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Intermediate'= "orange", 'Pericentral'="yellow", 'General'="#00B813", 'Shared'='dodgerblue')
+colScale <- scale_color_manual(name = "grp",values = myColors, guide='none') 
+fillScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+controls <- enhancers
+controls$Hepatocyte_consensus_class[grep('Positive_control', controls$Hepatocyte_consensus_class)] <- 'Positive control'
+controls$Hepatocyte_consensus_class[grep('BEC', controls$Hepatocyte_consensus_class)] <- 'Shared'
+```
+
+```{r}
+ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=Hepatocyte_consensus_class)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) 
+```
+```{r}
+ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=Hepatocyte_consensus_class)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+```
+
+```{r}
+# Marginal density plot of x (top panel)
+xdensity <- ggplot(controls, aes(Invivo_24h_LogFC, col=Hepatocyte_consensus_class, fill=Hepatocyte_consensus_class)) + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none") + theme_bw() + ylab('Density') + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank())
+# Marginal density plot of y (right panel)
+ydensity <- ggplot(controls, aes(HepG2_LogFC, col=Hepatocyte_consensus_class, fill=Hepatocyte_consensus_class))  + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none")  + theme_bw() + coord_flip() + ylab('Density') + theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(), axis.title.y=element_blank())
+# Scatter
+sc <- ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=Hepatocyte_consensus_class)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+# Blank
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme(plot.background = element_blank(), 
+   panel.grid.major = element_blank(),
+   panel.grid.minor = element_blank(), 
+   panel.border = element_blank(),
+   panel.background = element_blank(),
+   axis.title.x = element_blank(),
+   axis.title.y = element_blank(),
+   axis.text.x = element_blank(), 
+   axis.text.y = element_blank(),
+   axis.ticks = element_blank()
+     )
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Correlation_plot.pdf')
+library("gridExtra")
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+dev.off()
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+```
+
+# 4b. Correlation plot colored by annotation
+
+```{r}
+colScale <- scale_fill_brewer(palette = "Set3")
+```
+
+```{r}
+controls <- enhancers
+controls$annotation[grep('Shuffle', enhancers$Hepatocyte_consensus_class)] <- 'Shuffle'
+controls$annotation[grep('Downstream', controls$annotation)] <- 'Downstream'
+controls$annotation[grep('Promoter', controls$annotation)] <- 'Promoter'
+```
+
+```{r}
+ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=annotation)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) 
+```
+
+```{r}
+ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=annotation)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+```
+
+```{r}
+# Marginal density plot of x (top panel)
+xdensity <- ggplot(controls, aes(Invivo_24h_LogFC, col=annotation, fill=annotation)) + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none") + theme_bw() + ylab('Density') + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank())  + NoLegend()
+# Marginal density plot of y (right panel)
+ydensity <- ggplot(controls, aes(HepG2_LogFC, col=annotation, fill=annotation))  + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none")  + theme_bw() + coord_flip() + ylab('Density') + theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(), axis.title.y=element_blank()) + NoLegend()
+# Scatter
+sc <- ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=annotation)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() + colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+# Blank
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme(plot.background = element_blank(), 
+   panel.grid.major = element_blank(),
+   panel.grid.minor = element_blank(), 
+   panel.border = element_blank(),
+   panel.background = element_blank(),
+   axis.title.x = element_blank(),
+   axis.title.y = element_blank(),
+   axis.text.x = element_blank(), 
+   axis.text.y = element_blank(),
+   axis.ticks = element_blank()
+     )
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Correlation_plot_by_annotation.pdf')
+library("gridExtra")
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+dev.off()
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+```
+
+# 5. Correlation by region type
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Positive_control'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Shared'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'General'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Pericentral'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Periportal'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Intermediate'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+```{r}
+controls <- enhancers
+controls <- controls[which(controls$Hepatocyte_consensus_class %in% 'Shuffle'),]
+cor(controls$HepG2_LogFC, controls$Invivo_24h_LogFC, use="complete.obs")
+```
+
+# 6. Boxplot by regulon
+
+```{r}
+tfs <- c('Tbx3_-', 'Tcf7l1_-', 'Hnf1a_+', 'Cebpa_+', 'Onecut1_+', 'Foxa1_+', 'Nfib_+', 'Hnf4a_+')
+alldf <- data.frame()
+for (tf in tfs){
+  df <- enhancers[grep(tf, enhancers$regulon),c('Invivo_24h_LogFC', 'HepG2_LogFC')]
+  df$regulon <- rep(tf, nrow(df))
+  alldf <- rbind(alldf, df)
+}
+df <- enhancers[grep('Shuffle', enhancers$Hepatocyte_consensus_class),c('Invivo_24h_LogFC', 'HepG2_LogFC')]
+df$regulon <- rep('Shuffle', nrow(df))
+alldf <- rbind(alldf, df)
+df <- enhancers[grep('Positive_control', enhancers$Hepatocyte_consensus_class),c('Invivo_24h_LogFC', 'HepG2_LogFC')]
+df$regulon <- rep('Positive_control', nrow(df))
+alldf <- rbind(alldf, df)
+controls <- alldf
+```
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#ec662f", 'Tbx3_-'='#f7beca')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Regulon_in_vivo_combined.pdf')
+ggplot(controls, aes(x = reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Regulon") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+dev.off()
+ggplot(controls, aes(x = reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE), y = Invivo_24h_LogFC, fill=reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Regulon") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7)
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Regulon_in_vitro_combined.pdf')
+ggplot(controls, aes(x = reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Regulon") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(label = "p.signif", method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+dev.off()
+ggplot(controls, aes(x = reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE), y = HepG2_LogFC, fill=reorder(regulon, -HepG2_LogFC, FUN = mean, na.rm = TRUE))) + geom_violin() + geom_boxplot(width=0.1) + theme_bw() + xlab("Regulon") + ylab('Log FC') + theme(axis.text.x = element_text(angle = 45, hjust=1)) + stat_compare_means(method = "wilcox.test", ref.group = "Shuffle") + NoLegend() + colScale + geom_text(aes(label=..count..), y=5.6, stat='count', colour="black", size=4) + ylim(-6, 6)
+```
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive_control"= c[8], 'Shuffle'='red',  'Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#ec662f", 'Tbx3_-'='#f7beca')
+colScale <- scale_color_manual(name = "grp",values = myColors, guide='none') 
+fillScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+controls <- alldf
+# Marginal density plot of x (top panel)
+xdensity <- ggplot(controls, aes(Invivo_24h_LogFC, col=regulon, fill=regulon)) + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none") + theme_bw() + ylab('Density') + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank())  + NoLegend()
+# Marginal density plot of y (right panel)
+ydensity <- ggplot(controls, aes(HepG2_LogFC, col=regulon, fill=regulon))  + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none")  + theme_bw() + coord_flip() + ylab('Density') + theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(), axis.title.y=element_blank()) + NoLegend()
+# Scatter
+sc <- ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=regulon)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() +colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+# Blank
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme(plot.background = element_blank(), 
+   panel.grid.major = element_blank(),
+   panel.grid.minor = element_blank(), 
+   panel.border = element_blank(),
+   panel.background = element_blank(),
+   axis.title.x = element_blank(),
+   axis.title.y = element_blank(),
+   axis.text.x = element_blank(), 
+   axis.text.y = element_blank(),
+   axis.ticks = element_blank()
+     )
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Correlation_plot_by_regulon.pdf')
+library("gridExtra")
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+dev.off()
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+```
+
+```{r}
+# In the same plot
+controls <- alldf
+df1 <- controls[,c(1,3)]
+df2 <- controls[,c(2,3)]
+colnames(df1) <- c('LogFC', 'regulon')
+colnames(df2) <- c('LogFC', 'regulon')
+df1$system <- 'Invivo'
+df2$system <- 'HepG2'
+controls <- rbind(df1, df2)
+controls$fill <- paste0(controls$system, '_', controls$regulon)
+```
+
+```{r}
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive_control"= c[8], 'Shuffle'='red',  'Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#f7a418", 'Tbx3_-'='#f7beca')
+myColors2 <- c("Positive_control"= c[8], 'Shuffle'='red',  'Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#f7a418", 'Tbx3_-'='#f7beca')
+myColors2 <-  adjustcolor(myColors, alpha=0.5)
+names(myColors2) <- names(myColors) 
+names(myColors) <- paste0('Invivo_', names(myColors))
+names(myColors2) <- paste0('HepG2_', names(myColors2))
+myColors <- c(myColors, myColors2)
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+```
+
+```{r}
+myColors <- c("Both"= 'Purple', "HepG2"='brown1', 'Invivo'='dodgerblue', 'None'='grey')
+colScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Regulon_both_combined.pdf')
+controlsx <- controls[-which(controls$regulon %in% c('Positive_control', 'Shuffle')),]
+ggplot(controlsx, aes(x = regulon, y = LogFC, fill=system)) + geom_violin() + geom_boxplot(width=0.1,  position = position_dodge(width = 0.9)) + theme_bw() + xlab("Regulon") + ylab('Log FC') + stat_compare_means(label='p.signif',method = "wilcox.test", aes(group = system), method.args = list(alternative = "greater")) + theme(axis.text.x = element_text(angle = 45, hjust=1)) + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + colScale
+dev.off()
+controlsx <- controls[-which(controls$regulon %in% c('Positive_control', 'Shuffle')),]
+ggplot(controlsx, aes(x = regulon, y = LogFC, fill=system)) + geom_violin() + geom_boxplot(width=0.1,  position = position_dodge(width = 0.9)) + theme_bw() + xlab("Regulon") + ylab('Log FC') + stat_compare_means(label='p.signif',method = "wilcox.test", aes(group = system), method.args = list(alternative = "greater")) + theme(axis.text.x = element_text(angle = 45, hjust=1)) + geom_text(aes(label=..count..), y=6.6, stat='count', colour="black", size=4) + ylim(-7, 7) + colScale
+```
+
+# 7. Highlight regions active only in HepG2, only in vivo, or shared
+
+```{r}
+controls <- enhancers
+myColors <- c("Both"= 'Purple', "HepG2"='brown1', 'Invivo'='dodgerblue', 'None'='grey')
+colScale <- scale_color_manual(name = "grp",values = myColors, guide='none') 
+fillScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+# Marginal density plot of x (top panel)
+xdensity <- ggplot(controls, aes(Invivo_24h_LogFC, col=activity_pattern, fill=activity_pattern)) + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none") + theme_bw() + ylab('Density') + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank(), axis.title.x=element_blank())  + NoLegend()
+# Marginal density plot of y (right panel)
+ydensity <- ggplot(controls, aes(HepG2_LogFC, col=activity_pattern, fill=activity_pattern))  + 
+  geom_density(alpha=.1) + 
+  colScale + fillScale +
+  theme(legend.position = "none")  + theme_bw() + coord_flip() + ylab('Density') + theme(axis.text.y=element_blank(), axis.ticks.y=element_blank(), axis.title.y=element_blank()) + NoLegend()
+# Scatter
+sc <- ggplot(controls, aes(x=Invivo_24h_LogFC,y=HepG2_LogFC, color=activity_pattern)) + geom_point(alpha=.5) +  theme_bw() + xlab("In vivo LogFC") + ylab('HepG2 LogFC') + NoLegend() +colScale + ylim(-4, 5) + xlim(-5, 6) + stat_ellipse(type = "norm", linetype = 1, size = 2, level=0.85)
+# Blank
+blankPlot <- ggplot()+geom_blank(aes(1,1))+
+  theme(plot.background = element_blank(), 
+   panel.grid.major = element_blank(),
+   panel.grid.minor = element_blank(), 
+   panel.border = element_blank(),
+   panel.background = element_blank(),
+   axis.title.x = element_blank(),
+   axis.title.y = element_blank(),
+   axis.text.x = element_blank(), 
+   axis.text.y = element_blank(),
+   axis.ticks = element_blank()
+     )
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Correlation_plot_by_activity_pattern.pdf')
+library("gridExtra")
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+dev.off()
+grid.arrange(xdensity, blankPlot, sc, ydensity, 
+        ncol=2, nrow=2, widths=c(4, 1.4), heights=c(1.4, 4))
+```
+```{r, eval=FALSE}
+regionNamesToDF <- function(region_names){
+  seqnames <- sapply(strsplit(region_names, split = ":"), "[", 1)
+  coords <- sapply(strsplit(region_names, split = ":"), "[", 2)
+  start <- sapply(strsplit(coords, split = "-"), "[", 1)
+  end <- sapply(strsplit(coords, split = "-"), "[", 2)
+  dataframe <- cbind(seqnames, start, end)
+  return(dataframe)
+}
+```
+
+```{r}
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'HepG2'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/HepG2.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'Invivo'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/Invivo.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'Both'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/Both.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'None'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/None.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+```
+
+```{r}
+# Export to bed
+enhancers <- enhancers[-grep('Promoter', enhancers$annotation),]
+r <- enhancers[which(enhancers$activity_pattern == 'HepG2'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/HepG2_no_promoter.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'Invivo'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/Invivo_no_promoter.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'Both'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/Both_no_promoter.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+# Export to bed
+r <- enhancers[which(enhancers$activity_pattern == 'None'), 'mallet_regions']
+write.table(regionNamesToDF(r[-which(is.na(r))]), file='/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/None_no_promoter.bed', sep='\t', quote=FALSE, col.names = FALSE, row.names = FALSE)
+```
+
+# 8. What are the differences between regions uniquely active in HepG2, in vivo or both?
+
+```{r}
+# Check proportions per class
+fillScale <- scale_fill_brewer(palette = "Set3")
+controls <- enhancers[-which(is.na(enhancers$activity_pattern)), ]
+controls$annotation[grep('Downstream', controls$annotation)] <- 'Downstream'
+controls$annotation[grep('Promoter', controls$annotation)] <- 'Promoter'
+x <- table(controls$activity_pattern, controls$annotation)
+x <- apply(x, 1, function(i) i/sum(i))*100
+x <- melt(x)
+colnames(x) <- c('Region_type', 'Pattern', 'Percentage')
+x$Region_type <- factor(x$Region_type, levels = c("Promoter", "Distal Intergenic", "3' UTR", "Intron", "Downstream", "Exon", "5' UTR"));
+# Grouped
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/active_proportions_annotation.pdf')
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Region_type)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+dev.off()
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Region_type)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+```
+
+```{r}
+# Check proportions per class
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c("Positive control"= c[8], 'Shuffle'='red',  'Periportal' = "#9CA700", 'Intermediate'= "#00BD61", 'Pericentral'="#00C08E", 'General'="#00B813", 'Shared'='dodgerblue')
+fillScale <- scale_fill_manual(name = "grp",values = myColors, guide='none') 
+controls <- enhancers[-which(is.na(enhancers$activity_pattern)), ]
+controls$Hepatocyte_consensus_class[grep('Positive_control', controls$Hepatocyte_consensus_class)] <- 'Positive control'
+controls$Hepatocyte_consensus_class[grep('BEC', controls$Hepatocyte_consensus_class)] <- 'Shared'
+x <- table(controls$activity_pattern, controls$Hepatocyte_consensus_class)
+x <- apply(x, 1, function(i) i/sum(i))*100
+x <- melt(x)
+colnames(x) <- c('Region_type', 'Pattern', 'Percentage')
+x$Pattern <- factor(x$Pattern, levels=rev(c('Both', 'Invivo', 'HepG2', 'None')))
+x$Region_type <- factor(x$Region_type, levels=rev(c('Positive control', 'Shared', 'General', 'Periportal', 'Intermediate', 'Pericentral', 'Shuffle'))) 
+# Grouped
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/active_proportions_region_type_reorder.pdf')
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Region_type)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+dev.off()
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Region_type)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+```
+
+```{r}
+controls <- enhancers[-which(is.na(enhancers$activity_pattern)), ]
+tfs <- c('Tbx3_-', 'Tcf7l1_-', 'Hnf1a_+', 'Cebpa_+', 'Onecut1_+', 'Foxa1_+', 'Nfib_+', 'Hnf4a_+')
+alldf <- data.frame()
+for (tf in tfs){
+  df <- enhancers[grep(tf, controls$regulon),c('activity_pattern'), drop=FALSE]
+  df$regulon <- rep(tf, nrow(df))
+  alldf <- rbind(alldf, df)
+}
+controls <- alldf
+```
+
+```{r}
+# Check proportions per class
+library(RColorBrewer)
+c <-brewer.pal(8,'Greens')
+myColors <- c('Cebpa_+' = "#4783c4", 'Hnf4a_+' = "#268c37", 'Foxa1_+' = "#e94547", 'Onecut1_+' = "#6c4696",  'Hnf1a_+' = '#fbb81c', 'Nfib_+'='#5bc0cc', 'Tcf7l1_-' = "#ec662f", 'Tbx3_-'='#f7beca')
+fillScale <- scale_fill_manual(name = "grp",values = myColors) 
+x <- table(controls$activity_pattern, controls$regulon)
+x <- apply(x, 1, function(i) i/sum(i))*100
+x <- melt(x)
+colnames(x) <- c('Regulon', 'Pattern', 'Percentage')
+# Grouped
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/active_proportions_regulon.pdf')
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Regulon)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+dev.off()
+ggplot(x, aes(x=Pattern, y=Percentage, fill=Regulon)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() + coord_flip()  + fillScale
+```
+
+# 9. Expression/NES plot
+
+```{r}
+path <- '/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/regions/cisTarget_np/forR/'
+motif_enrichment_table_list <- list()
+for (file in list.files(path)){
+  name <- gsub('.tsv', '', file)
+  motif_enrichment_table_list[[name]] <- read.delim(paste0(path, file), sep='\t')
+  colnames(motif_enrichment_table_list[[name]][1]) <- 'Motif'
+}
+motif_enrichment_table_list <- motif_enrichment_table_list[c('Invivo', 'HepG2', 'Both', 'None')]
+```
+
+```{r}
+# Create psedobulk matrix for these groups
+library(SCopeLoomR)
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Liver/Multiome/loom/RNA+Multiome_integrated_HQ-10.loom')
+dgem <- get_dgem(loom)
+cell_data <- get_cell_annotation(loom)
+Invivo <- log(rowSums(dgem[,grep('Hep', cell_data$Refined_cell_type)])/sum(rowSums(dgem[,grep('Hep', cell_data$Refined_cell_type)]))*10^6+1)
+names(Invivo) <- rownames(dgem)
+
+loom <- open_loom('/staging/leuven/stg_00002/lcb/cbravo/Multiomics_pipeline/analysis/DPCL/scenicplus_final_autoreg/grnboost/SCENIC+_DPCL_grnboost_gene_based_autoreg.loom')
+dgem <- get_dgem(loom)
+cell_data <- get_cell_annotation(loom)
+HepG2<- log(rowSums(dgem[,grep('HepG2', cell_data$ACC_Cell_type)])/sum(rowSums(dgem[,grep('HepG2', cell_data$ACC_Cell_type)]))*10^6+1)
+names(HepG2) <- Hmisc::capitalize(tolower(rownames(dgem)))
+
+Invivo <- Invivo[which(names(Invivo) %in% names(HepG2))]
+HepG2 <- HepG2[names(Invivo)]
+rna_profile <- as.data.frame(cbind(Invivo, HepG2))
+rna_profile$Both <- rowMeans(rna_profile)
+rna_profile$None <- rna_profile$Both 
+```
+
+
+```{r}
+TF_list <- c('Hnf1a', 'Rxra', 'Nfia', 'Hnf4a', 'Cebpa', 'Foxa1', 'Onecut1', 'Tcf7l2', 'Tcf7l1')
+TF_data <- data.frame()
+for (TF in TF_list){
+  if (TF %in% rownames(rna_profile)){
+      for (name in names(motif_enrichment_table_list)){
+    sel_df <- motif_enrichment_table_list[[name]][which(rowSums(t(apply(motif_enrichment_table_list[[name]],1,function(u) grepl(TF,u)))) != 0),]
+    if (nrow(sel_df) > 0){
+      log_tf <- max(as.vector(unlist(sel_df$NES)))
+    } else {
+      log_tf <- 3
+    }
+      row_to_add <- t(as.data.frame(c(TF, name, log_tf, rna_profile[TF,name])))
+      TF_data <- rbind(TF_data, row_to_add)
+    }
+  } 
+}
+
+colnames(TF_data) <- c('TF', 'Cell_type', 'Motif', 'Expression')
+rownames(TF_data) <- NULL
+TF_data <- TF_data[rev(order(TF_data$Motif)),]
+TF_data$Motif <- as.numeric(TF_data$Motif)
+TF_data$Expression <- as.numeric(TF_data$Expression)
+TF_data$Norm_Expression <- ave(TF_data$Expression, TF_data$Cell_type, FUN=function(x) scale(x)) 
+TF_data[which(TF_data$Cell_type == 'Invivo' & TF_data$TF == 'Onecut1'), 'Motif'] <- 6
+#TF_data[which(TF_data$Cell_type == 'PC' & TF_data$TF == 'Hnf1a'), 'Motif'] <- 5.34
+#TF_data[which(TF_data$Cell_type == 'PP' & TF_data$TF == 'Tbx3'), 'Motif'] <- 8
+#TF_data$Motif[which(TF_data$Motif > 10)] <- 10
+#TF_data[which(TF_data$Cell_type == 'PC-Int' & TF_data$TF == 'Cebpa'), 'Expression'] <- 0.25
+#TF_data[which(TF_data$Cell_type == 'PC' & TF_data$TF == 'Cebpa'), 'Expression'] <- 0.25
+```
+
+```{r}
+TF_data$Expression[which(TF_data$Expression > 5)] <- 5
+TF_data$Motif[which(TF_data$Motif > 8)] <- 8
+col.range=c(0,7.71)
+TF_data$Cell_type <- factor(TF_data$Cell_type, levels=rev(c('Both', 'Invivo', 'HepG2',  'None')))
+TF_data$TF <- factor(TF_data$TF, c('Foxa1', 'Hnf1a', 'Hnf4a',  'Rxra', 'Nfia', 'Cebpa', 'Onecut1', 'Tcf7l2', 'Tcf7l1'))
+g <- ggplot(data = TF_data, mapping = aes_string(x = 'Cell_type', y = 'TF')) +
+    geom_tile(mapping = aes_string(fill = 'Expression')) +
+    geom_point(mapping = aes_string(size = 'Motif'), colour="black",pch=21, fill = 'black') +
+    scale_radius(range = c(3,  15)) +
+    scale_fill_distiller(palette = "RdYlBu", limits=c(0,6)) +
+    theme_bw() +
+    theme(axis.title.x = element_blank(), axis.title.y = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1)) +
+   coord_flip()
+print(g)
+ggsave('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/Dotplot_motif_enrich.pdf', g, width=9, height=5)
+```
+
+# 10. Make correlation plots for selected samples
+
+```{r}
+invivo <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/cpm_counts_invivo_V2.RDS')
+invitro <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invitro/cpm_counts_invitro_V3.RDS')
+invivo <- invivo[,c(1:8, 17:24)]
+colnames(invivo) <- gsub('mouse_new1', 'mouse_1_rep2', colnames(invivo))
+colnames(invivo) <- gsub('mouse_new2', 'mouse_2_rep2', colnames(invivo))
+colnames(invivo) <- gsub('24h_', 'rep1_', colnames(invivo))
+invitro <- invitro[,c(18:21)]
+colnames(invitro) <- c("3prime_HepG2_2_Plasmid","3prime_HepG2_1_Plasmid","3prime_HepG2_1_cDNA","3prime_HepG2_2_cDNA")
+```
+
+```{r}
+cpm_counts <- merge(invivo, invitro, by=0, all=TRUE)
+cpm_counts[is.na(cpm_counts)] <- 0
+rownames(cpm_counts) <- cpm_counts[,1]
+cpm_counts <- cpm_counts[,-1]
+colnames(cpm_counts) <- gsub('_', ' ', colnames(cpm_counts))
+colnames(cpm_counts) <- gsub("prime", "'", colnames(cpm_counts))
+```
+
+```{r}
+cormat <- round(cor(cpm_counts),2)
+dist.mat <- dist(cormat)
+clust <- hclust(dist.mat)
+cormat <- cormat[clust$order,rev(clust$order)]
+```
+
+```{r}
+library(reshape2)
+library(ggplot2)
+# Format matrix
+melted_cormat <- melt(cormat)
+# Create heatmap
+ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
+ geom_tile(color = "white")+
+ scale_fill_gradient2(low = "floralwhite", high = "red", 
+   midpoint = 0, limit = c(0,1), space = "Lab", 
+    name="Pearson\nCorrelation") +
+  theme_minimal()+ # minimal theme
+ theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+    size = 10, hjust = 1))+
+ coord_fixed()
+# Add correlation values
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/cheqseq_correlation_samples.pdf', width=8, height=8)
+ggheatmap + 
+geom_text(aes(Var2, Var1, label = value), color = "black", size = 3) +
+theme(
+  axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major = element_blank(),
+  panel.border = element_blank(),
+  panel.background = element_blank(),
+  axis.ticks = element_blank())
+dev.off()
+```
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+df <- enhancers[,c("5prime_24h_LogFC", "5prime-v2_24h_LogFC", "3prime_24h_LogFC", "HepG2_LogFC", "Invivo_24h_LogFC")]
+colnames(df) <- c("5' mouse rep1", "5' mouse rep2", "3' mouse", "3' HepG2", "3'/5' mouse")
+df <- df[-which(df[,4] < -4),]
+#df <- df[-which(df$HepG2_LogFC> 5),]
+```
+
+```{r}
+pdf('/staging/leuven/stg_00002/lcb/cbravo/Liver/Figures/Figure_3/plots/cheqseq_correlation_experiments.pdf')
+library(psych)
+pairs.panels(df, 
+             method = "pearson", # correlation method
+             hist.col = "dodgerblue",
+             density = TRUE,  # show density plots
+             ellipses = TRUE) # show correlation ellipses
+dev.off()
+```
+
+```{r}
+invivo <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/raw_counts_invivo_V2.RDS')
+invitro <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invitro/raw_counts_invitro_V3.RDS')
+invivo <- invivo[,c(1:8, 17:24)]
+colnames(invivo) <- gsub('mouse_new1', 'mouse_1_rep2', colnames(invivo))
+colnames(invivo) <- gsub('mouse_new2', 'mouse_2_rep2', colnames(invivo))
+colnames(invivo) <- gsub('24h_', 'rep1_', colnames(invivo))
+invitro <- invitro[,c(18:21)]
+colnames(invitro) <- c("3prime_HepG2_2_Plasmid","3prime_HepG2_1_Plasmid","3prime_HepG2_1_cDNA","3prime_HepG2_2_cDNA")
+```
+
+```{r}
+cpm_counts <- merge(invivo, invitro, by=0, all=TRUE)
+cpm_counts[is.na(cpm_counts)] <- 0
+rownames(cpm_counts) <- cpm_counts[,1]
+cpm_counts <- cpm_counts[,-1]
+colnames(cpm_counts) <- gsub('_', ' ', colnames(cpm_counts))
+colnames(cpm_counts) <- gsub("prime", "'", colnames(cpm_counts))
+```
+
+```{r}
+write.table(cpm_counts, file='/staging/leuven/stg_00002/lcb/cbravo/GEO_Bravo_etal_2022/geo_submission/12KMPRA/processed/12K_MPRA_counts.tsv', sep='\t', quote=FALSE)
+```
+
+# 11. Check regions in eRegulons
+
+```{r}
+enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+x <- enhancers[-which(is.na(enhancers$regulon)),]
+x <- x[-grep('Promoter', x$annotation),]
+x <- x[-which(x$Hepatocyte_refined_class == 'Shared'),]
+x <- x[-which(x$Enhancer_type == 'HepG2_mm10'),]
+x <- x[-which(x$regulon == ""),]
+x <- x[-which(is.na(x$activity_pattern)),]
+table(x$activity_pattern)
+sum(table(x$activity_pattern)[c('Both', 'HepG2', 'Invivo')])/sum(table(x$activity_pattern))
+```
+
+```{r}
+tfs <- c('Hnf4a', 'Hnf1a', 'Onecut1', 'Cebpa', 'Foxa1', 'Tcf7l1', 'Tbx3')
+prop_invivo <- vector()
+prop_hepg2 <- vector()
+for (tf in tfs){
+  enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+  x <- enhancers[-which(is.na(enhancers$regulon)),]
+  x <- x[grep(paste(c(tf),collapse="|"), x$regulon),]
+  x <- x[-which(is.na(x$activity_pattern)),]
+  if (tf == 'Tbx3'){
+    prop_invivo <- c(prop_invivo, sum(table(x$activity_pattern)[c('Invivo')])/sum(table(x$activity_pattern)[c('Invivo', 'None')]))
+    prop_hepg2 <- c(prop_hepg2, sum(table(x$activity_pattern)[c('HepG2')])/sum(table(x$activity_pattern)[c('HepG2', 'None')]))
+  } else {
+    prop_invivo <- c(prop_invivo, sum(table(x$activity_pattern)[c('Invivo')])/sum(table(x$activity_pattern)[c('Invivo', 'None')]))
+    prop_hepg2 <- c(prop_hepg2, sum(table(x$activity_pattern)[c('HepG2')])/sum(table(x$activity_pattern)[c('HepG2', 'None')]))
+    
+  }
+  
+  
+}
+names(prop_invivo) <- tfs
+names(prop_hepg2) <- tfs
+prop_invivo
+prop_hepg2
+
+```
+
+```{r}
+tfs <- c('Hnf4a', 'Hnf1a', 'Onecut1', 'Cebpa', 'Foxa1', 'Tcf7l1', 'Tbx3', 'Nfib')
+prop_invivo <- vector()
+prop_hepg2 <- vector()
+prop_comb <- vector()
+for (tf in tfs){
+  enhancers <- readRDS('/staging/leuven/stg_00002/lcb/cbravo/Liver/CHEQ-seq_experiments/invivo/analysis_27721/Enhancers_info_v2_wcontrols.RDS')
+  x <- enhancers[-which(is.na(enhancers$regulon)),]
+  x <- x[-grep('Promoter', x$annotation),]
+  x <- x[grep(paste(c(tf),collapse="|"), x$regulon),]
+  x <- x[-which(is.na(x$activity_pattern)),]
+  if (tf == 'Tbx3'){
+    prop_invivo <- c(prop_invivo, sum(table(x$activity_pattern)[c('Invivo')])/sum(table(x$activity_pattern)[c('Invivo', 'None')]))
+    prop_hepg2 <- c(prop_hepg2, sum(table(x$activity_pattern)[c('HepG2')])/sum(table(x$activity_pattern)[c('HepG2', 'None')]))
+    prop_comb <- c(prop_comb, sum(table(x$activity_pattern)[c('HepG2', 'Invivo')])/sum(table(x$activity_pattern)))
+  } else {
+    prop_invivo <- c(prop_invivo, sum(table(x$activity_pattern)[c('Invivo', 'Both')])/sum(table(x$activity_pattern)[c('Invivo', 'None', 'Both')]))
+    prop_hepg2 <- c(prop_hepg2, sum(table(x$activity_pattern)[c('HepG2', 'Both')])/sum(table(x$activity_pattern)[c('Invivo', 'None', 'Both')]))
+    prop_comb <- c(prop_comb, sum(table(x$activity_pattern)[c('HepG2', 'Invivo', 'Both')])/sum(table(x$activity_pattern)))
+    
+  }
+  
+  
+}
+names(prop_invivo) <- tfs
+names(prop_hepg2) <- tfs
+names(prop_comb) <- tfs
+prop_invivo
+prop_hepg2
+prop_comb
+```
